@@ -483,7 +483,8 @@ describe('child delight and concern', () => {
       },
     ]
     const fetchSpy = mockApi({ 'POST /api/voice/speak': { body: { audio: null } } })
-    const base = fetchSpy.getMockImplementation()!
+    const base = fetchSpy.getMockImplementation()
+    if (!base) throw new Error('mockApi should install a fetch implementation')
     fetchSpy.mockImplementation(async (input, init) =>
       String(input) === '/api/chat' && init?.method === 'POST'
         ? new Response(JSON.stringify(replies.shift()), { headers: { 'content-type': 'application/json' } })
