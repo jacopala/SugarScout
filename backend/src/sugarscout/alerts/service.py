@@ -198,7 +198,8 @@ async def sync_alerts(
         rows = (
             await conn.execute(
                 text(
-                    """UPDATE alerts SET state = 'resolved', resolved_at = now()
+                    # Cleared alerts become unread again so the parent sees the good news.
+                    """UPDATE alerts SET state = 'resolved', resolved_at = now(), read_at = NULL
                        WHERE child_id = :c AND state <> 'resolved' AND rule_type = ANY(:rules)
                        RETURNING id, rule_type"""
                 ),

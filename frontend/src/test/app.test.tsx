@@ -39,6 +39,7 @@ const URGENT: AlertOut = {
   opened_at: '2026-11-08T12:00:00Z',
   acknowledged_at: null,
   resolved_at: null,
+  read_at: null,
   notifications: [
     {
       id: 1,
@@ -88,8 +89,8 @@ function mockApi(overrides: Routes = {}) {
       .find((k) => url.startsWith(k) && (init?.method ?? 'GET') === 'GET')
     const hit = key ? table[key] : undefined
     if (hit) return json(hit.body, hit.status ?? 200)
-    const post = overrides[`POST ${url}`]
-    if (post) return json(post.body, post.status ?? 200)
+    const other = overrides[`${init?.method ?? 'GET'} ${url}`]
+    if (other) return json(other.body, other.status ?? 200)
     return json({ detail: 'not found' }, 404)
   })
 }
@@ -132,13 +133,49 @@ describe('routing', () => {
 })
 
 describe('parent dashboard', () => {
-  it('shows the current value and an open alert with its SMS status', async () => {
-    mockApi({ '/api/alerts': { body: [URGENT] } })
+  it('rings the bell for unread alerts and lists them in the pop-up', async () => {
+    const fetchSpy = mockApi({ '/api/alerts': { body: [URGENT] }, 'POST /api/alerts/read': { body: { marked: 1 } } })
     renderAt('/parent')
     expect(await screen.findByText('112')).toBeInTheDocument()
-    expect(await screen.findByText("Alex's glucose is urgently low (50 mg/dL).")).toBeInTheDocument()
-    expect(screen.getByText(/dry run \(Twilio not configured\)/)).toBeInTheDocument()
+    const bell = await screen.findByRole('button', { name: 'Alerts: 1 unread' })
+    expect(bell).toHaveAttribute('data-unread')
+    expect(screen.queryByText("Alex's glucose is urgently low (50 mg/dL).")).toBeNull()
+    fireEvent.click(bell)
+    expect(screen.getByRole('dialog', { name: 'Alerts' })).toBeInTheDocument()
+    expect(screen.getByText("Alex's glucose is urgently low (50 mg/dL).")).toBeInTheDocument()
+    expect(screen.getByText(/Text dry run/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Acknowledge urgent low alert' })).toBeInTheDocument()
+    // An open alert can't be deleted until it's handled.
+    expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull()
+    await waitFor(() => {
+      const read = fetchSpy.mock.calls.find(([url, init]) => String(url) === '/api/alerts/read' && init?.method === 'POST')
+      expect(JSON.parse(String(read?.[1]?.body))).toEqual({ ids: [7] })
+    })
+  })
+
+  it('lets the parent delete a read alert', async () => {
+    const seen = { ...URGENT, state: 'acknowledged', read_at: '2026-11-08T12:01:00Z' }
+    const fetchSpy = mockApi({ '/api/alerts': { body: [seen] }, 'DELETE /api/alerts/7': { body: { ok: true } } })
+    renderAt('/parent')
+    const bell = await screen.findByRole('button', { name: 'Alerts' })
+    expect(bell).not.toHaveAttribute('data-unread')
+    fireEvent.click(bell)
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete urgent low alert' }))
+    await waitFor(() =>
+      expect(fetchSpy.mock.calls.some(([url, init]) => String(url) === '/api/alerts/7' && init?.method === 'DELETE')).toBe(true),
+    )
+  })
+
+  it('jumps between sections from the sandwich menu', async () => {
+    mockApi()
+    renderAt('/parent')
+    fireEvent.click(await screen.findByRole('button', { name: 'Open menu' }))
+    const nav = screen.getByRole('navigation', { name: 'Dashboard sections' })
+    expect(nav).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: 'Insulin' }))
+    expect(screen.queryByRole('navigation', { name: 'Dashboard sections' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+    expect(screen.getByRole('link', { name: 'Insulin' })).toHaveAttribute('aria-current', 'true')
   })
 
   it('says the sensor is silent instead of showing a stale number', async () => {
@@ -229,9 +266,14 @@ describe('mood check-in', () => {
       },
     })
     renderAt('/parent')
-    expect(await screen.findByText('Sad')).toBeInTheDocument()
+    expect(await screen.findByText('Sad', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByText(/Today 3:42/)).toBeInTheDocument()
     expect(screen.getByText(/Today: 1 check-in, average 1\.0 of 5/)).toBeInTheDocument()
+    expect(screen.getByText('1 low mood today')).toBeInTheDocument()
+    // The full list stays folded away until asked for.
+    expect(document.querySelector('.mood-list')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 1 check-in' }))
+    expect(document.querySelector('.mood-list')).not.toBeNull()
   })
 })
 

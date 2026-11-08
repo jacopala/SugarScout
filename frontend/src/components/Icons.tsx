@@ -94,6 +94,17 @@ export const AlertIcon = (p: IconProps) => (
     <path d="M12 7v6M12 17h.01" />
   </Svg>
 )
+export const MenuIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </Svg>
+)
+export const TrashIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 7h16M10 11v6M14 11v6" />
+    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+  </Svg>
+)
 export const PhoneIcon = (p: IconProps) => (
   <Svg {...p}>
     <rect x="7" y="2.5" width="10" height="19" rx="2.5" />

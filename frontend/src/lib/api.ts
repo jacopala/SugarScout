@@ -118,7 +118,7 @@ export interface HourPoint {
 
 export interface NotificationOut {
   id: number
-  channel: 'dashboard' | 'sms'
+  channel: 'dashboard' | 'sms' | 'push'
   kind: 'opened' | 'resolved'
   status: 'queued' | 'sent' | 'failed' | 'dry_run' | 'skipped'
   body: string
@@ -138,6 +138,7 @@ export interface AlertOut {
   opened_at: string
   acknowledged_at: string | null
   resolved_at: string | null
+  read_at: string | null
   notifications: NotificationOut[]
 }
 
@@ -185,4 +186,15 @@ export interface VoiceTurn {
   emotion: string
   answered_question?: boolean
   open_meals?: boolean
+}
+
+export async function apiDelete<T = unknown>(path: string): Promise<T> {
+  const key = getDemoKey()
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json', ...(key ? { 'X-Demo-Key': key } : {}) },
+  })
+  const data: unknown = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, data)
+  return data as T
 }

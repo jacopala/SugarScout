@@ -165,3 +165,21 @@ async def test_dictation_returns_transcript_without_wake_word(
     app.state.speech = FakeSpeech("a turkey sandwich and apple juice")  # type: ignore[attr-defined]
     r = await c.post("/voice/transcribe", content=CLIP)
     assert r.json() == {"transcript": "a turkey sandwich and apple juice"}
+
+
+async def test_alert_inbox_read_then_delete(api: tuple[AsyncClient, object]) -> None:
+    c, _ = api
+    await c.post("/help")
+    alert = next(a for a in (await c.get("/alerts")).json() if a["rule_type"] == "help_request")
+    assert alert["read_at"] is None
+
+    assert (await c.delete(f"/alerts/{alert['id']}")).status_code == 409, "unread can't be deleted"
+    marked = (await c.post("/alerts/read", json={"ids": [alert["id"]]})).json()
+    assert marked == {"marked": 1}
+    assert (await c.delete(f"/alerts/{alert['id']}")).status_code == 409, (
+        "open alerts need ack first"
+    )
+
+    await c.post(f"/alerts/{alert['id']}/ack")
+    assert (await c.delete(f"/alerts/{alert['id']}")).status_code == 200
+    assert all(a["id"] != alert["id"] for a in (await c.get("/alerts")).json())

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  apiDelete,
   apiGet,
   apiPost,
   type AlertOut,
@@ -145,6 +146,7 @@ export interface Checkin {
   mood: number
   label: string
   source: 'tap' | 'voice'
+  context?: 'daily' | 'after_meal' | 'agent' | null
   created_at: string
 }
 
@@ -308,5 +310,23 @@ export function useAnswerQuestion() {
       void qc.invalidateQueries({ queryKey: ['agent'] })
       void qc.invalidateQueries({ queryKey: ['child', 'status'] })
     },
+  })
+}
+
+// ---- Alert inbox -----------------------------------------------------------------------
+
+export function useMarkAlertsRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => apiPost<{ marked: number }>('/alerts/read', { ids }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }),
+  })
+}
+
+export function useDismissAlert() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/alerts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }),
   })
 }
