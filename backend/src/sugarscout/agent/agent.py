@@ -53,7 +53,7 @@ with type 1 diabetes. You see the latest facts and decide two things:
 Return ONLY JSON:
 {{"ask": "<question id or null>", "wording": "<child-facing question>",
   "heads_up": {{"send": true|false, "message": "<parent message>"}},
-  "reasons": ["<short reason>", "..."]}}"""
+  "reasons": ["<short reason, under 15 words>", "..."]}}"""
 
 
 @dataclass
@@ -65,6 +65,20 @@ class Decision:
     status: str = "idle"  # ok | overridden | fallback | idle
     overrides: list[str] = field(default_factory=list)
     model_output: dict[str, Any] | None = None
+
+
+REASON_MAX_CHARS = 160
+
+
+def clip(text: str, limit: int = REASON_MAX_CHARS) -> str:
+    """Shorten to `limit` characters on a word boundary, ending with an ellipsis."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1]
+    if " " in cut:
+        cut = cut[: cut.rindex(" ")]
+    return cut.rstrip(" ,;:.-") + "…"
 
 
 def _child_safe(wording: str) -> bool:
@@ -150,7 +164,7 @@ def apply_guardrails(raw: dict[str, Any] | None, s: Situation, allowed: list[Eli
                 d.overrides.append("heads-up wording replaced")
                 msg = default_heads_up(s)
             d.heads_up = msg
-    d.reasons = [str(r)[:160] for r in (raw.get("reasons") or [])][:5] or s.concern_reasons
+    d.reasons = [clip(str(r)) for r in (raw.get("reasons") or [])][:5] or s.concern_reasons
     if d.overrides:
         d.status = "overridden"
     return d

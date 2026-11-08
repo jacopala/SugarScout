@@ -1400,6 +1400,51 @@ input[type='password'] {
   font-size: 0.875rem;
   color: var(--text-muted);
 }
+/* Why Scout did something: square boxes, full text wrapped inside, a light shadow. */
+.reasons {
+  list-style: none;
+  margin: var(--space-1, 4px) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.reason {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 2px rgba(31, 31, 61, 0.05), 0 2px 8px rgba(31, 31, 61, 0.07);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.card-head-meta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.link-button {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--violet);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-align: left;
+}
+.link-button:hover {
+  text-decoration: underline;
+}
+.link-button:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.agent-toggle {
+  margin-top: var(--space-3);
+}
 
 /* =====================================================================================
    Responsive layer: desktop, tablets, iOS and Android phones from 16:9 to 22:9.

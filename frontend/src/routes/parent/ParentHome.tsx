@@ -71,6 +71,7 @@ export function ParentHome() {
                 <p className="empty">Waiting for readings…</p>
               )}
             </section>
+            <AgentTimeline />
             <section className="card" aria-labelledby="week-h">
               <h2 id="week-h">Last 7 days</h2>
               {week.data && week.data.length > 0 ? (
@@ -83,7 +84,6 @@ export function ParentHome() {
           </div>
           <aside className="dash-side">
             <DemoControls />
-            <AgentTimeline />
             <MealsCard />
             <InsulinCard />
             <MoodCard />

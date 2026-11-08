@@ -41,11 +41,13 @@ RULE_LABELS: dict[str, str] = {
     "low": "low glucose",
     "high": "high glucose",
     "rapid_drop": "rapid drop",
+    "rapid_rise": "rapid rise",
     "data_gap": "sensor data gap",
     "emergency_language": "companion safety",
     "help_request": "help request",
     "predicted_low": "low soon",
     "predicted_urgent_low": "urgent low soon",
+    "predicted_high": "high soon",
     "symptoms_reported": "symptoms reported",
     "agent_heads_up": "Scout heads-up",
 }

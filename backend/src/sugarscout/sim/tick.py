@@ -48,7 +48,8 @@ async def evaluate_and_sync(
     lookback = timedelta(
         seconds=max(
             cfg.data_gap_seconds * 2,
-            settings.sim_tick_seconds * (max(cfg.high_consecutive, cfg.rapid_drop_window) + 2),
+            settings.sim_tick_seconds
+            * (max(cfg.high_consecutive, cfg.rapid_drop_window, cfg.rapid_rise_window) + 2),
         )
     )
     readings = await recent_readings(engine, child_id, now, lookback)

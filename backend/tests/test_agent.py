@@ -336,3 +336,19 @@ def test_heads_up_never_nudges_treatment(message: str) -> None:
     )
     assert d.heads_up is not None and "insulin is needed" not in d.heads_up
     assert "heads-up wording replaced" in d.overrides
+
+
+def test_long_reasons_are_clipped_on_a_word_boundary() -> None:
+    from sugarscout.agent.agent import REASON_MAX_CHARS, clip
+
+    long = (
+        "Glucose is 180 mg/dL and rising quickly so checking if Alex ate recently helps explain "
+        * 3
+    )
+    out = clip(long)
+    assert len(out) <= REASON_MAX_CHARS
+    assert out.endswith("…")
+    assert long.startswith(out[:-1])
+    assert out[:-1] == out[:-1].rstrip()
+    assert long[len(out) - 1] == " ", "cut falls between words, not mid-word"
+    assert clip("short   reason\n") == "short reason"

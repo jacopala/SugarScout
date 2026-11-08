@@ -19,8 +19,8 @@ from sugarscout.settings import Settings
 URGENT = "urgent"
 WARNING = "warning"
 
-VALUE_RULES = ("urgent_low", "low", "high", "rapid_drop")
-PREDICTIVE_RULES = ("predicted_low", "predicted_urgent_low")
+VALUE_RULES = ("urgent_low", "low", "high", "rapid_drop", "rapid_rise")
+PREDICTIVE_RULES = ("predicted_low", "predicted_urgent_low", "predicted_high")
 READING_RULES = (*VALUE_RULES, "data_gap")
 
 
@@ -39,6 +39,9 @@ class RulesConfig:
     high_consecutive: int = 4
     rapid_drop_mg_dl: int = 25
     rapid_drop_window: int = 4
+    # 30 mg/dL over 3 intervals is ~2 mg/dL per minute: a CGM's single "rising" arrow.
+    rapid_rise_mg_dl: int = 30
+    rapid_rise_window: int = 4
     data_gap_seconds: int = 30
 
     @classmethod
@@ -51,6 +54,8 @@ class RulesConfig:
             high_consecutive=s.rule_high_consecutive,
             rapid_drop_mg_dl=s.rule_rapid_drop_mg_dl,
             rapid_drop_window=s.rule_rapid_drop_window,
+            rapid_rise_mg_dl=s.rule_rapid_rise_mg_dl,
+            rapid_rise_window=s.rule_rapid_rise_window,
             data_gap_seconds=s.rule_data_gap_seconds,
         )
 
@@ -145,7 +150,8 @@ def evaluate(
         )
 
     tail = readings[-cfg.high_consecutive :]
-    if len(tail) == cfg.high_consecutive and all(r.value > cfg.high for r in tail):
+    high_holds = len(tail) == cfg.high_consecutive and all(r.value > cfg.high for r in tail)
+    if high_holds:
         hits.append(
             RuleHit(
                 "high",
@@ -166,6 +172,20 @@ def evaluate(
                     f"{child_name}'s glucose is dropping fast ({drop} mg/dL in "
                     f"{len(window) - 1} readings).",
                     {**_evidence(window, cfg), "drop_mg_dl": drop},
+                )
+            )
+
+    window = readings[-cfg.rapid_rise_window :]
+    if len(window) >= 2:
+        rise = window[-1].value - window[0].value
+        if rise >= cfg.rapid_rise_mg_dl:
+            hits.append(
+                RuleHit(
+                    "rapid_rise",
+                    WARNING,
+                    f"{child_name}'s glucose is rising fast ({rise} mg/dL in "
+                    f"{len(window) - 1} readings, now {latest.value}).",
+                    {**_evidence(window, cfg), "rise_mg_dl": rise},
                 )
             )
 
@@ -204,6 +224,19 @@ def evaluate(
                         WARNING,
                         f"{child_name}'s glucose may drop to about {fc.predicted} mg/dL in "
                         f"~{fc.horizon_min} min (now {latest.value}).",
+                        evidence,
+                    )
+                )
+            # "High soon" warns before the high rule can fire, and holds until it does,
+            # so the parent is never left without an open alert on the way up.
+            if fc.slope_per_5min > 0 and fc.predicted > cfg.high and not high_holds:
+                hits.append(
+                    RuleHit(
+                        "predicted_high",
+                        WARNING,
+                        f"{child_name}'s glucose may reach about {fc.predicted} mg/dL in "
+                        f"~{fc.horizon_min} min (now {latest.value}, rising "
+                        f"{fc.slope_per_5min:.0f} per 5 min).",
                         evidence,
                     )
                 )

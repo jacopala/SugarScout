@@ -406,8 +406,17 @@ describe('Scout agent', () => {
       },
     })
     renderAt('/parent')
+    // Minimal by default: only the latest entry, no reasons or older history.
     expect(await screen.findByText('Alex is rising (214) after ~54 g carbs and no insulin is logged.')).toBeInTheDocument()
+    expect(screen.queryByText('rising after a snack')).toBeNull()
+    expect(screen.queryByText('Not yet')).toBeNull()
+    const toggle = screen.getByRole('button', { name: 'Show reasons and history (1 more)' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    // The parent asks for more: reasons and the full history appear.
+    fireEvent.click(toggle)
     expect(screen.getByText('rising after a snack')).toBeInTheDocument()
     expect(screen.getByText('Not yet')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true')
   })
 })

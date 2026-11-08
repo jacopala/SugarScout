@@ -7,6 +7,7 @@ export function alertWhy(alert: AlertOut): string[] {
     config?: Record<string, number>
     forecast?: { predicted: number; horizon_min: number; slope_per_5min: number }
     drop_mg_dl?: number
+    rise_mg_dl?: number
     gap_seconds?: number | null
     symptom?: string
     category?: string
@@ -30,11 +31,15 @@ export function alertWhy(alert: AlertOut): string[] {
     case 'rapid_drop':
       lines.push(`Rule: fell ${c.rapid_drop_mg_dl ?? 25}+ mg/dL within ${c.rapid_drop_window ?? 4} readings (fell ${t.drop_mg_dl ?? '?'})`)
       break
+    case 'rapid_rise':
+      lines.push(`Rule: rose ${c.rapid_rise_mg_dl ?? 30}+ mg/dL within ${c.rapid_rise_window ?? 4} readings (rose ${t.rise_mg_dl ?? '?'})`)
+      break
     case 'data_gap':
       lines.push(t.gap_seconds ? `No sensor reading for ${Math.round(t.gap_seconds)} seconds` : 'No sensor readings')
       break
     case 'predicted_low':
     case 'predicted_urgent_low':
+    case 'predicted_high':
       if (t.forecast) {
         lines.push(
           `Forecast: about ${t.forecast.predicted} mg/dL in ~${t.forecast.horizon_min} min (changing ${t.forecast.slope_per_5min} per 5 min)`,

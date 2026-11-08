@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     rule_high_consecutive: int = 4
     rule_rapid_drop_mg_dl: int = 25
     rule_rapid_drop_window: int = 4
+    rule_rapid_rise_mg_dl: int = 30
+    rule_rapid_rise_window: int = 4
     rule_data_gap_seconds: int = 30
     sms_cooldown_seconds: int = 60
 

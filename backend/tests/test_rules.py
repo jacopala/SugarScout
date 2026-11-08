@@ -75,3 +75,34 @@ def test_trigger_data_records_readings_and_config() -> None:
     assert hit.trigger_data["readings"][-1]["value_mg_dl"] == 50
     assert hit.trigger_data["config"]["urgent_low"] == 54
     assert hit.severity == "urgent"
+
+
+def test_rapid_rise_over_window() -> None:
+    assert "rapid_rise" in hits(trace(130, 140, 150, 160))  # 30 over 3 steps
+    assert "rapid_rise" not in hits(trace(130, 139, 149, 159))  # 29
+    assert "rapid_rise" not in hits(trace(160, 150, 140, 130))  # falling
+
+
+def test_rapid_rise_message_says_where_glucose_is() -> None:
+    ev = evaluate(trace(130, 145, 160, 175), T0 + timedelta(seconds=16), CFG, "Alex")
+    hit = next(h for h in ev.hits if h.rule_type == "rapid_rise")
+    assert hit.severity == "warning"
+    assert "rising fast (45 mg/dL in 3 readings, now 175)" in hit.message
+    assert hit.trigger_data["rise_mg_dl"] == 45
+
+
+def test_high_soon_warns_before_the_high_rule() -> None:
+    climb = trace(150, 165, 180, 195, 210, 225, 235)
+    got = hits(climb)
+    assert "predicted_high" in got
+    assert "high" not in got
+
+
+def test_high_soon_hands_over_to_high() -> None:
+    got = hits(trace(200, 220, 240, 255, 265, 275, 285))
+    assert "high" in got
+    assert "predicted_high" not in got
+
+
+def test_steady_in_range_has_no_high_soon() -> None:
+    assert "predicted_high" not in hits(trace(150, 151, 150, 152, 151, 150, 151))
