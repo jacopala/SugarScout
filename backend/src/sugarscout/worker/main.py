@@ -1,15 +1,17 @@
 """ARQ worker.
 
-Phase 1 runs a single cron job, `heartbeat`, which proves the worker is alive and
-can reach both Redis and the database. Phase 3 adds CGM polling; Phase 4 adds rules
-evaluation and the dead-man's switch that pages when this heartbeat goes stale or
-the database is unreachable (Section 18.7).
+Jobs:
+- `heartbeat` (every minute): proves the worker is alive and the database reachable.
+- `cgm_tick` (every SIM_TICK_SECONDS): fake CGM reading, rules on raw data, alert sync.
+  Rules run even during a sensor dropout, which is how data gaps get caught.
+- `send_sms` (enqueued): Twilio delivery, off the tick's critical path.
 
 Run with: arq sugarscout.worker.main.WorkerSettings
 """
 
 from __future__ import annotations
 
+import random
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
@@ -18,8 +20,11 @@ from arq.connections import RedisSettings
 from sqlalchemy import text
 
 from sugarscout.db import create_engine
+from sugarscout.demo import DEMO_CHILD_ID, ensure_demo_child, ensure_history
 from sugarscout.log import configure_logging, get_logger
+from sugarscout.notify.sms import deliver
 from sugarscout.settings import get_settings
+from sugarscout.sim.tick import run_tick
 
 log = get_logger(__name__)
 
@@ -31,7 +36,10 @@ async def startup(ctx: dict[str, Any]) -> None:
     configure_logging(settings, configure_stdlib=False)
     ctx["settings"] = settings
     ctx["engine"] = create_engine(settings)
-    log.info("worker.startup")
+    ctx["rng"] = random.Random()
+    await ensure_demo_child(ctx["engine"], settings)
+    await ensure_history(ctx["engine"], settings)
+    log.info("worker.startup", sim_enabled=settings.sim_enabled, tick_s=settings.sim_tick_seconds)
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
@@ -52,13 +60,35 @@ async def heartbeat(ctx: dict[str, Any]) -> str:
     return now.isoformat()
 
 
+async def cgm_tick(ctx: dict[str, Any]) -> int | None:
+    settings = ctx["settings"]
+    if not settings.sim_enabled:
+        return None
+    value, events, sms_ids = await run_tick(
+        ctx["engine"], ctx["redis"], settings, DEMO_CHILD_ID, settings.demo_child_name, ctx["rng"]
+    )
+    for nid in sms_ids:
+        await ctx["redis"].enqueue_job("send_sms", nid)
+    for ev in events:
+        log.info("alert." + ev.kind, alert_id=ev.alert_id, rule=ev.rule_type)
+    return value
+
+
+async def send_sms(ctx: dict[str, Any], notification_id: int) -> str:
+    return await deliver(ctx["engine"], ctx["settings"], notification_id)
+
+
+_TICK_SECONDS = set(range(0, 60, max(1, get_settings().sim_tick_seconds)))
+
+
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(str(get_settings().redis_url))
     on_startup = startup
     on_shutdown = shutdown
-    functions: ClassVar[list[Any]] = []
+    functions: ClassVar[list[Any]] = [send_sms]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, second=0, run_at_startup=True, timeout=30, unique=True),  # every minute
+        cron(cgm_tick, second=_TICK_SECONDS, timeout=10, unique=True, keep_result=0),
     ]
     max_jobs = 10
     health_check_interval = 30

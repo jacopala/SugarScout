@@ -17,9 +17,10 @@ from typing import Any
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from sugarscout.dev.seed import child_ids, clear, seed
+from sugarscout.dev.seed import child_ids, clear, refresh_aggregates, seed
 from tests.conftest import BUDGET_MULTIPLIER, record_budget
 
 pytestmark = pytest.mark.budget
@@ -48,15 +49,20 @@ async def seeded(engine: AsyncEngine) -> AsyncIterator[uuid.UUID]:
             .all()
         )
         for chunk in chunks:
-            await conn.execute(
-                text(
-                    "CALL convert_to_columnstore(CAST(:c AS regclass), if_not_columnstore => true)"
-                ),
-                {"c": chunk},
-            )
-        await conn.execute(text("CALL refresh_continuous_aggregate('glucose_hourly', NULL, NULL)"))
-        await conn.execute(text("CALL refresh_continuous_aggregate('glucose_daily', NULL, NULL)"))
+            try:
+                await conn.execute(
+                    text(
+                        "CALL convert_to_columnstore(CAST(:c AS regclass), "
+                        "if_not_columnstore => true)"
+                    ),
+                    {"c": chunk},
+                )
+            except DBAPIError as exc:
+                # The background columnstore policy may have converted it first.
+                if "already compressed" not in str(exc):
+                    raise
         await conn.execute(text("ANALYZE glucose_readings"))
+    await refresh_aggregates(engine)
     yield child_ids(CHILDREN)[2]
     await clear(engine)
 

@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ReadyResponse } from '../lib/api'
+import { ApiStatus } from '../components/ApiStatus'
+import type { AlertOut, DemoState, ReadyResponse } from '../lib/api'
 import { routes } from '../router'
 
 const READY: ReadyResponse = {
@@ -14,25 +16,95 @@ const READY: ReadyResponse = {
   worker_heartbeat: { last_seen: '2026-11-08T00:00:00+00:00', age_s: 12 },
 }
 
-function mockFetch(status: number, body: unknown) {
-  return vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }),
-  )
+const DEMO: DemoState = {
+  child_name: 'Alex',
+  scenario: 'steady',
+  scenarios: [
+    { id: 'steady', label: 'Steady' },
+    { id: 'rapid_drop', label: 'Rapid drop' },
+  ],
+  sms_mode: 'dry_run',
+  llm_enabled: false,
+  access_code_required: false,
+}
+
+const URGENT: AlertOut = {
+  id: 7,
+  rule_type: 'urgent_low',
+  label: 'urgent low',
+  severity: 'urgent',
+  state: 'open',
+  message: "Alex's glucose is urgently low (50 mg/dL).",
+  trigger_data: {},
+  opened_at: '2026-11-08T12:00:00Z',
+  acknowledged_at: null,
+  resolved_at: null,
+  notifications: [
+    {
+      id: 1,
+      channel: 'sms',
+      kind: 'opened',
+      status: 'dry_run',
+      body: 'x',
+      error: null,
+      created_at: '2026-11-08T12:00:00Z',
+      sent_at: null,
+    },
+  ],
+}
+
+type Routes = Record<string, { status?: number; body: unknown }>
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+/** Route fetches by path prefix; unknown paths 404. */
+function mockApi(overrides: Routes = {}) {
+  const table: Routes = {
+    '/api/readyz': { body: READY },
+    '/api/demo/state': { body: DEMO },
+    '/api/glucose/latest': {
+      body: { ts: new Date().toISOString(), value: 112, trend: 'flat', age_s: 2, stale: false },
+    },
+    '/api/glucose/live': { body: [] },
+    '/api/glucose/week': { body: [] },
+    '/api/alerts': { body: [] },
+    '/api/child/status': { body: { first_name: 'Alex', reminder: null, reminder_rule: null } },
+    '/api/chat/history': { body: [] },
+    '/api/summary': { body: null },
+    ...overrides,
+  }
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = String(input)
+    const key = Object.keys(table)
+      .sort((a, b) => b.length - a.length)
+      .find((k) => url.startsWith(k) && (init?.method ?? 'GET') === 'GET')
+    const hit = key ? table[key] : undefined
+    if (hit) return json(hit.body, hit.status ?? 200)
+    const post = overrides[`POST ${url}`]
+    if (post) return json(post.body, post.status ?? 200)
+    return json({ detail: 'not found' }, 404)
+  })
+}
+
+function withClient(ui: ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return <QueryClientProvider client={client}>{ui}</QueryClientProvider>
 }
 
 function renderAt(path: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(routes, { initialEntries: [path] })
-  return render(
-    <QueryClientProvider client={client}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
-  )
+  return render(withClient(<RouterProvider router={router} />))
 }
+
+beforeEach(() => {
+  localStorage.clear()
+})
 
 describe('routing', () => {
   it('renders the child tree inside the child view scope only', async () => {
-    mockFetch(200, READY)
+    mockApi()
     const { container } = renderAt('/child')
     expect(await screen.findByRole('img', { name: 'Your companion' })).toBeInTheDocument()
     expect(container.querySelector('[data-view="child"]')).not.toBeNull()
@@ -40,9 +112,9 @@ describe('routing', () => {
   })
 
   it('renders the parent tree inside the parent view scope only', async () => {
-    mockFetch(200, READY)
+    mockApi()
     const { container } = renderAt('/parent')
-    expect(await screen.findByRole('heading', { name: 'System status' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Alex' })).toBeInTheDocument()
     expect(container.querySelector('[data-view="parent"]')).not.toBeNull()
     expect(container.querySelector('[data-view="child"]')).toBeNull()
   })
@@ -53,26 +125,63 @@ describe('routing', () => {
   })
 })
 
+describe('parent dashboard', () => {
+  it('shows the current value and an open alert with its SMS status', async () => {
+    mockApi({ '/api/alerts': { body: [URGENT] } })
+    renderAt('/parent')
+    expect(await screen.findByText('112')).toBeInTheDocument()
+    expect(await screen.findByText("Alex's glucose is urgently low (50 mg/dL).")).toBeInTheDocument()
+    expect(screen.getByText(/dry run \(Twilio not configured\)/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Acknowledge urgent low alert' })).toBeInTheDocument()
+  })
+
+  it('says the sensor is silent instead of showing a stale number', async () => {
+    mockApi({
+      '/api/glucose/latest': { body: { ts: null, value: 140, trend: 'flat', age_s: 95, stale: true } },
+    })
+    renderAt('/parent')
+    expect(await screen.findByText('No recent data')).toBeInTheDocument()
+    expect(screen.queryByText('140')).toBeNull()
+  })
+
+  it('asks for the access code when the API requires one', async () => {
+    mockApi({
+      '/api/demo/state': { body: { ...DEMO, access_code_required: true } },
+      'POST /api/demo/check-key': { body: { ok: true } },
+    })
+    renderAt('/parent')
+    const input = await screen.findByLabelText('Access code')
+    fireEvent.change(input, { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(localStorage.getItem('sugarscout.demoKey')).toBe('secret'))
+    expect(await screen.findByRole('heading', { name: 'Alex' })).toBeInTheDocument()
+  })
+})
+
 describe('ApiStatus', () => {
   it('reports connected when /readyz is ok', async () => {
-    const fetchSpy = mockFetch(200, READY)
-    renderAt('/parent')
+    mockApi()
+    render(withClient(<ApiStatus detailed />))
     expect(await screen.findByText('All systems connected')).toBeInTheDocument()
     expect(screen.getByText('timescaledb 2.30.2')).toBeInTheDocument()
     expect(screen.getByText('12s ago')).toBeInTheDocument()
-    expect(fetchSpy).toHaveBeenCalledWith('/api/readyz', expect.anything())
   })
 
   it('shows degraded details from a 503 body instead of treating it as down', async () => {
-    mockFetch(503, { ...READY, status: 'degraded', redis: { ok: false, latency_ms: null, detail: 'unreachable' } })
-    renderAt('/parent')
+    mockApi({
+      '/api/readyz': {
+        status: 503,
+        body: { ...READY, status: 'degraded', redis: { ok: false, latency_ms: null, detail: 'unreachable' } },
+      },
+    })
+    render(withClient(<ApiStatus detailed />))
     expect(await screen.findByText('Some services unavailable')).toBeInTheDocument()
     expect(screen.getByText('Unavailable (unreachable)')).toBeInTheDocument()
   })
 
   it('reports unreachable when the request fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('network down'))
-    renderAt('/')
+    render(withClient(<ApiStatus />))
     // ApiStatus retries once (1s backoff) before reporting the API as down.
     expect(await screen.findByText('API unreachable', {}, { timeout: 4000 })).toBeInTheDocument()
   })

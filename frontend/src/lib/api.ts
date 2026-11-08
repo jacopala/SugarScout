@@ -52,3 +52,106 @@ export async function getReadiness(): Promise<ReadyResponse> {
     throw err
   }
 }
+
+// ---- Demo access code (stand-in for auth; see backend api/deps.py) ----------------
+
+const KEY_STORAGE = 'sugarscout.demoKey'
+
+export function getDemoKey(): string | null {
+  try {
+    return localStorage.getItem(KEY_STORAGE)
+  } catch {
+    return null
+  }
+}
+
+export function setDemoKey(key: string | null): void {
+  try {
+    if (key) localStorage.setItem(KEY_STORAGE, key)
+    else localStorage.removeItem(KEY_STORAGE)
+  } catch {
+    /* storage unavailable: the key lives only for this page view */
+  }
+}
+
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const key = getDemoKey()
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(key ? { 'X-Demo-Key': key } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const data: unknown = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, data)
+  return data as T
+}
+
+// ---- Domain types ------------------------------------------------------------
+
+export type Trend = 'flat' | 'up' | 'down' | 'double_up' | 'double_down'
+
+export interface LatestReading {
+  ts: string | null
+  value: number | null
+  trend: Trend | null
+  age_s: number | null
+  stale: boolean
+}
+
+export interface LivePoint {
+  ts: string
+  value: number
+  trend: Trend | null
+}
+
+export interface HourPoint {
+  bucket: string
+  avg: number
+  min: number
+  max: number
+  n: number
+}
+
+export interface NotificationOut {
+  id: number
+  channel: 'dashboard' | 'sms'
+  kind: 'opened' | 'resolved'
+  status: 'queued' | 'sent' | 'failed' | 'dry_run' | 'skipped'
+  body: string
+  error: string | null
+  created_at: string
+  sent_at: string | null
+}
+
+export interface AlertOut {
+  id: number
+  rule_type: string
+  label: string
+  severity: 'urgent' | 'warning' | 'info'
+  state: 'open' | 'acknowledged' | 'resolved'
+  message: string
+  trigger_data: Record<string, unknown>
+  opened_at: string
+  acknowledged_at: string | null
+  resolved_at: string | null
+  notifications: NotificationOut[]
+}
+
+export interface DemoState {
+  child_name: string
+  scenario: string
+  scenarios: { id: string; label: string }[]
+  sms_mode: 'live' | 'dry_run'
+  llm_enabled: boolean
+  access_code_required: boolean
+}
+
+export interface ChildStatus {
+  first_name: string
+  reminder: string | null
+  reminder_rule: string | null
+}

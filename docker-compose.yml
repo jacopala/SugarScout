@@ -3,6 +3,8 @@
 name: sugarscout
 
 x-backend: &backend
+  # One image shared by api, worker and migrate so they can never drift apart.
+  image: sugarscout-backend:local
   build:
     context: ./backend
   env_file:

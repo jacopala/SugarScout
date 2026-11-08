@@ -47,10 +47,60 @@ class Settings(BaseSettings):
 
     worker_heartbeat_key: str = "worker:heartbeat"
 
+    # --- Hackathon demo -------------------------------------------------------------
+    # Protects every mutating endpoint (X-Demo-Key header). Empty disables the check,
+    # which is only allowed locally.
+    demo_access_code: str = ""
+    demo_child_name: str = "Alex"
+    demo_child_age_band: str = "8-10"
+    # The fake CGM writes one reading per tick (real timestamps, sped-up dynamics).
+    sim_tick_seconds: int = 5
+    sim_enabled: bool = True
+    sim_history_days: int = 14
+
+    # Rules (demo-scaled defaults; the doc's placeholders for thresholds).
+    rule_urgent_low: int = 54
+    rule_low: int = 70
+    rule_low_consecutive: int = 2
+    rule_high: int = 250
+    rule_high_consecutive: int = 4
+    rule_rapid_drop_mg_dl: int = 25
+    rule_rapid_drop_window: int = 4
+    rule_data_gap_seconds: int = 30
+    sms_cooldown_seconds: int = 60
+
+    # Twilio (trial account is fine). Missing values => SMS runs in dry-run mode.
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from: str = ""
+    parent_phone: str = ""
+
+    # NVIDIA API catalog (OpenAI-compatible).
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nemotron_chat_model: str = "nvidia/nemotron-3-nano-30b-a3b"
+    nemotron_analysis_model: str = "nvidia/nemotron-3-super-120b-a12b"
+    llm_timeout_s: float = 20.0
+
+    @property
+    def twilio_configured(self) -> bool:
+        return bool(
+            self.twilio_account_sid
+            and self.twilio_auth_token
+            and self.twilio_from
+            and self.parent_phone
+        )
+
+    @property
+    def llm_configured(self) -> bool:
+        return bool(self.nvidia_api_key)
+
     @model_validator(mode="after")
     def _require_tls_outside_local(self) -> Settings:
         if self.env in (Env.STAGING, Env.PRODUCTION) and self.db_ssl_mode is not DbSslMode.REQUIRE:
             raise ValueError("DB_SSL_MODE must be 'require' in staging and production")
+        if self.env in (Env.STAGING, Env.PRODUCTION) and not self.demo_access_code:
+            raise ValueError("DEMO_ACCESS_CODE must be set outside local/test")
         return self
 
     @property

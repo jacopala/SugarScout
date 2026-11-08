@@ -12,8 +12,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sugarscout.db import create_engine
@@ -45,8 +47,8 @@ _INSERT = text(
            :source
     FROM unnest(CAST(:child_ids AS uuid[])) WITH ORDINALITY AS c(child_id, ord)
     CROSS JOIN generate_series(
-        date_trunc('minute', now()) - make_interval(days => :days),
-        date_trunc('minute', now()),
+        date_trunc('minute', CAST(:until AS timestamptz)) - make_interval(days => :days),
+        date_trunc('minute', CAST(:until AS timestamptz)),
         INTERVAL '5 minutes'
     ) AS g(ts)
     ON CONFLICT (child_id, ts) DO NOTHING
@@ -54,11 +56,26 @@ _INSERT = text(
 )
 
 
-async def seed(engine: AsyncEngine, children: int, days: int, refresh: bool = True) -> int:
-    ids = child_ids(children)
+async def seed(
+    engine: AsyncEngine,
+    children: int,
+    days: int,
+    refresh: bool = True,
+    until: datetime | None = None,
+    ids: list[uuid.UUID] | None = None,
+) -> int:
+    """Insert `days` of 5-minute readings ending at `until` (default: now)."""
+    ids = ids or child_ids(children)
+    until = until or datetime.now(UTC)
     async with engine.begin() as conn:
         result = await conn.execute(
-            _INSERT, {"child_ids": [str(i) for i in ids], "days": days, "source": SEED_SOURCE}
+            _INSERT,
+            {
+                "child_ids": [str(i) for i in ids],
+                "days": days,
+                "source": SEED_SOURCE,
+                "until": until,
+            },
         )
         inserted = result.rowcount or 0
     if refresh:
@@ -66,13 +83,25 @@ async def seed(engine: AsyncEngine, children: int, days: int, refresh: bool = Tr
     return inserted
 
 
-async def refresh_aggregates(engine: AsyncEngine) -> None:
+async def refresh_aggregates(engine: AsyncEngine, attempts: int = 20) -> None:
     """Refresh both aggregates over all time. Needed after any backfill older than the
-    policy windows (Section 18.3). refresh_continuous_aggregate cannot run in a transaction."""
-    async with engine.connect() as conn:
-        conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
-        await conn.execute(text("CALL refresh_continuous_aggregate('glucose_hourly', NULL, NULL)"))
-        await conn.execute(text("CALL refresh_continuous_aggregate('glucose_daily', NULL, NULL)"))
+    policy windows (Section 18.3). refresh_continuous_aggregate cannot run in a transaction.
+
+    Retries when a background refresh-policy job holds the aggregate's lock.
+    """
+    for view in ("glucose_hourly", "glucose_daily"):
+        for attempt in range(attempts):
+            try:
+                async with engine.connect() as conn:
+                    conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+                    await conn.execute(
+                        text(f"CALL refresh_continuous_aggregate('{view}', NULL, NULL)")
+                    )
+                break
+            except DBAPIError as exc:
+                if "concurrent refresh" not in str(exc) or attempt == attempts - 1:
+                    raise
+                await asyncio.sleep(0.25)
 
 
 async def clear(engine: AsyncEngine) -> None:

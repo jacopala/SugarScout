@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 
-from sugarscout.api.routes import health
+from sugarscout.api.routes import alerts, demo, glucose, health
 from sugarscout.db import create_engine, create_sessionmaker
 from sugarscout.log import configure_logging, get_logger
 from sugarscout.settings import Settings, get_settings
@@ -32,10 +32,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.sessionmaker = create_sessionmaker(engine)
         app.state.redis = redis
+        # ARQ pool for enqueueing jobs (e.g. SMS for chat escalations). Lazily created
+        # so the API still starts, and /readyz still reports, when Redis is down.
+        app.state.arq = None
         log.info("api.startup")
         try:
             yield
         finally:
+            if app.state.arq is not None:
+                await app.state.arq.aclose()
             await redis.aclose()
             await engine.dispose()
             log.info("api.shutdown")
@@ -73,6 +78,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     app.include_router(health.router)
+    app.include_router(glucose.router)
+    app.include_router(alerts.router)
+    app.include_router(demo.router)
     return app
 
 

@@ -1,23 +1,56 @@
 import { Link } from 'react-router'
 
+import { AccessGate } from '../../components/AccessGate'
 import { ApiStatus } from '../../components/ApiStatus'
+import { AlertsPanel, DemoControls, GlucoseHero } from '../../components/Dashboard'
+import { LiveChart, WeekChart } from '../../components/GlucoseCharts'
+import { useDemoState, useLive, useWeek } from '../../lib/queries'
 
 export function ParentHome() {
+  const { data: demo } = useDemoState()
+  const live = useLive(10)
+  const week = useWeek()
+  const name = demo?.child_name ?? 'your child'
+
   return (
-    <div className="shell">
-      <header className="shell-header">
-        <Link className="brand" to="/">
-          <img src="/favicon.svg" alt="" />
-          SugarScout
-        </Link>
-      </header>
-      <p className="eyebrow">Parent dashboard</p>
-      <h1>System status</h1>
-      <p className="lede">
-        The dashboard is built in Phase 3. For now this page confirms that the API, database,
-        Redis, and worker are connected.
-      </p>
-      <ApiStatus detailed />
-    </div>
+    <AccessGate>
+      <div className="shell shell-wide">
+        <header className="shell-header">
+          <Link className="brand" to="/">
+            <img src="/favicon.svg" alt="" />
+            SugarScout
+          </Link>
+          <ApiStatus />
+        </header>
+        <p className="eyebrow">Parent dashboard</p>
+        <h1>{name}</h1>
+
+        <div className="dash-grid">
+          <div className="dash-main">
+            <GlucoseHero />
+            <section className="card" aria-labelledby="live-h">
+              <h2 id="live-h">Last 10 minutes</h2>
+              {live.data && live.data.length > 0 ? (
+                <LiveChart points={live.data} />
+              ) : (
+                <p className="empty">Waiting for readings…</p>
+              )}
+            </section>
+            <section className="card" aria-labelledby="week-h">
+              <h2 id="week-h">Last 7 days</h2>
+              {week.data && week.data.length > 0 ? (
+                <WeekChart points={week.data} />
+              ) : (
+                <p className="empty">No history yet.</p>
+              )}
+            </section>
+          </div>
+          <aside className="dash-side">
+            <DemoControls />
+            <AlertsPanel />
+          </aside>
+        </div>
+      </div>
+    </AccessGate>
   )
 }
