@@ -24,6 +24,7 @@ from sugarscout.ai.meals import analyze_meal as run_meal_analysis
 from sugarscout.db import create_engine
 from sugarscout.demo import DEMO_CHILD_ID, ensure_demo_child, ensure_history
 from sugarscout.log import configure_logging, get_logger
+from sugarscout.notify.push import deliver_pending as deliver_pending_push
 from sugarscout.notify.sms import deliver
 from sugarscout.settings import get_settings
 from sugarscout.sim.tick import run_tick
@@ -81,6 +82,12 @@ async def send_sms(ctx: dict[str, Any], notification_id: int) -> str:
     return await deliver(ctx["engine"], ctx["settings"], notification_id)
 
 
+async def push_outbox(ctx: dict[str, Any]) -> int:
+    """Deliver queued browser pushes (every alert open/resolve queues one)."""
+    s = ctx["settings"]
+    return await deliver_pending_push(ctx["engine"], s, s.demo_child_name)
+
+
 async def analyze_meal(ctx: dict[str, Any], meal_id: int) -> str:
     return await run_meal_analysis(ctx["engine"], ctx["settings"], ctx["llm"], meal_id)
 
@@ -96,6 +103,7 @@ class WorkerSettings:
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, second=0, run_at_startup=True, timeout=30, unique=True),  # every minute
         cron(cgm_tick, second=_TICK_SECONDS, timeout=10, unique=True, keep_result=0),
+        cron(push_outbox, second=set(range(0, 60, 2)), timeout=20, unique=True, keep_result=0),
     ]
     max_jobs = 10
     health_check_interval = 30

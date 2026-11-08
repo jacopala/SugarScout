@@ -30,10 +30,12 @@ log = get_logger(__name__)
 CHILD_MEAL_REPLY = "Yum! Thanks for telling me. I'll share it with your grown-up."
 
 MAX_SUGAR_G = 250.0
+MAX_CARBS_G = 300.0
 
 
 class MealItem(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    carbs_g: float = Field(ge=0, le=MAX_CARBS_G)
     sugar_g: float = Field(ge=0, le=MAX_SUGAR_G)
     contains_gluten: bool
 
@@ -48,6 +50,10 @@ class MealAnalysis(BaseModel):
         return round(sum(i.sugar_g for i in self.items), 1)
 
     @property
+    def total_carbs_g(self) -> float:
+        return round(sum(i.carbs_g for i in self.items), 1)
+
+    @property
     def contains_gluten(self) -> bool:
         return any(i.contains_gluten for i in self.items)
 
@@ -56,7 +62,8 @@ SYSTEM_PROMPT = """You estimate what a child ate, for their parent's records.
 
 Given the child's own words, list each food or drink with:
 - name: short, plain name
-- sugar_g: estimated TOTAL sugars in grams for a typical child portion (a number)
+- carbs_g: estimated TOTAL carbohydrates in grams for a typical child portion (a number)
+- sugar_g: estimated total sugars in grams (part of the carbs; never more than carbs_g)
 - contains_gluten: true if it usually contains wheat, barley, or rye
 
 Use typical kids' portions. If the description is vague, pick the most common version
@@ -65,7 +72,7 @@ The optional "note" is one short, neutral sentence for the parent (e.g. which it
 the main sugar source); leave it empty if there is nothing useful.
 
 Return ONLY JSON:
-{"items":[{"name":"apple juice","sugar_g":22,"contains_gluten":false}],
+{"items":[{"name":"apple juice","carbs_g":24,"sugar_g":22,"contains_gluten":false}],
  "confidence":"medium","note":""}"""
 
 
@@ -74,6 +81,9 @@ def validate_analysis(raw: str) -> MealAnalysis:
         analysis = MealAnalysis.model_validate(_extract_json(raw))
     except ValidationError as exc:
         raise SummaryRejected(f"schema: {exc.errors()[0]['msg']}") from exc
+    for item in analysis.items:
+        if item.sugar_g > item.carbs_g + 1:
+            raise SummaryRejected(f"sugar exceeds carbs for {item.name}")
     for t in [analysis.note, *(i.name for i in analysis.items)]:
         if t and (check_output(t) or any(p.search(t.lower()) for p in _PARENT_ADVICE)):
             raise SummaryRejected(f"treatment advice: {t[:80]}")
@@ -133,6 +143,7 @@ async def analyze_meal(
             analysis = {
                 **parsed.model_dump(),
                 "total_sugar_g": parsed.total_sugar_g,
+                "total_carbs_g": parsed.total_carbs_g,
                 "contains_gluten": parsed.contains_gluten,
             }
             status = "ok"

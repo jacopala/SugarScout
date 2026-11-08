@@ -177,10 +177,11 @@ export function useHelp() {
 }
 
 export interface MealAnalysis {
-  items: { name: string; sugar_g: number; contains_gluten: boolean }[]
+  items: { name: string; carbs_g?: number; sugar_g: number; contains_gluten: boolean }[]
   confidence: 'high' | 'medium' | 'low'
   note: string
   total_sugar_g: number
+  total_carbs_g?: number
   contains_gluten: boolean
 }
 

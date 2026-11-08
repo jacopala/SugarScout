@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.28",
     "openai>=1.55",
     "nvidia-riva-client>=2.19",
+    "pywebpush>=2.0",
 ]
 
 [dependency-groups]
@@ -59,7 +60,7 @@ mypy_path = "src"
 packages = ["sugarscout"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*", "riva.*"]
+module = ["arq.*", "riva.*", "pywebpush.*", "py_vapid.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

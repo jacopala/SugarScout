@@ -570,7 +570,7 @@ input[type='password'] {
 }
 .meal-totals {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -592,6 +592,10 @@ input[type='password'] {
 .meal-total.sugar {
   background: var(--sun-tint);
   color: var(--sun-ink);
+}
+.meal-total.carbs {
+  background: var(--lavender);
+  color: var(--indigo);
 }
 .meal-total.gluten {
   background: var(--blossom-tint);
@@ -630,6 +634,10 @@ input[type='password'] {
 .tag.sugar {
   background: var(--sun-tint);
   color: var(--sun-ink);
+}
+.tag.carbs {
+  background: var(--lavender);
+  color: var(--indigo);
 }
 .tag.gluten {
   background: var(--blossom-tint);
@@ -1196,4 +1204,41 @@ input[type='password'] {
 .food-chip[aria-pressed='true'] {
   background: var(--lavender);
   box-shadow: 0 6px 16px rgba(119, 102, 198, 0.25);
+}
+
+/* ---- Push toggle (parent band) ---------------------------------------------------- */
+.band-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.push-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.push-btn {
+  background: var(--sun);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-sun);
+}
+.push-btn:hover:not(:disabled) {
+  color: var(--text-strong);
+}
+.push-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(224, 223, 253, 0.18);
+  color: var(--on-indigo);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.push-note {
+  font-size: 0.8125rem;
+  color: var(--on-indigo-muted);
 }

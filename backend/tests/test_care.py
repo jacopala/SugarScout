@@ -22,8 +22,8 @@ from tests.test_voice import CLIP, FakeSpeech
 
 GOOD = {
     "items": [
-        {"name": "turkey sandwich", "sugar_g": 4, "contains_gluten": True},
-        {"name": "apple juice", "sugar_g": 22, "contains_gluten": False},
+        {"name": "turkey sandwich", "carbs_g": 34, "sugar_g": 4, "contains_gluten": True},
+        {"name": "apple juice", "carbs_g": 24, "sugar_g": 22, "contains_gluten": False},
     ],
     "confidence": "medium",
     "note": "Most of the sugar is from the juice.",
@@ -113,6 +113,7 @@ async def test_meal_analysis_totals_and_glucose_after(
 
     meal = next(m for m in (await c.get("/meals")).json() if m["id"] == meal_id)
     assert meal["analysis"]["total_sugar_g"] == 26
+    assert meal["analysis"]["total_carbs_g"] == 58
     assert meal["analysis"]["contains_gluten"] is True
     assert meal["glucose_1h"] == 168
 
@@ -127,7 +128,12 @@ async def test_meal_analysis_totals_and_glucose_after(
         ("I think it was yummy!", "rejected"),
         (
             json.dumps(
-                {**GOOD, "items": [{"name": "cake", "sugar_g": 9999, "contains_gluten": True}]}
+                {
+                    **GOOD,
+                    "items": [
+                        {"name": "cake", "carbs_g": 40, "sugar_g": 9999, "contains_gluten": True}
+                    ],
+                }
             ),
             "rejected",
         ),

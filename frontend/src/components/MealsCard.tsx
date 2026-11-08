@@ -12,6 +12,7 @@ function MealTags({ meal }: { meal: Meal }) {
   const a = meal.analysis
   return (
     <>
+      {a.total_carbs_g !== undefined ? <span className="tag carbs">Carbs ~{Math.round(a.total_carbs_g)} g</span> : null}
       <span className="tag sugar">Sugar ~{Math.round(a.total_sugar_g)} g</span>
       {a.contains_gluten ? <span className="tag gluten">Contains gluten</span> : <span className="tag gf">Gluten-free</span>}
       {a.confidence === 'low' ? <span className="tag">Rough guess</span> : null}
@@ -25,6 +26,7 @@ export function MealsCard() {
   const meals = data ?? []
   const estimated = meals.filter((m) => m.analysis_status === 'ok' && m.analysis)
   const sugar = estimated.reduce((s, m) => s + (m.analysis?.total_sugar_g ?? 0), 0)
+  const carbs = estimated.reduce((s, m) => s + (m.analysis?.total_carbs_g ?? 0), 0)
   const gluten = estimated.filter((m) => m.analysis?.contains_gluten).length
 
   return (
@@ -35,6 +37,10 @@ export function MealsCard() {
       ) : (
         <>
           <div className="meal-totals">
+            <div className="meal-total carbs">
+              <span>Carbs (est.)</span>
+              <strong>~{Math.round(carbs)} g</strong>
+            </div>
             <div className="meal-total sugar">
               <span>Sugar (est.)</span>
               <strong>~{Math.round(sugar)} g</strong>
@@ -48,7 +54,7 @@ export function MealsCard() {
           </div>
           <p className="ai-note">
             <SparkleIcon size={16} color="#7766C6" />
-            AI estimate from what Alex said or tapped. Not a carb count for dosing.
+            AI estimate from what Alex said or tapped. Not a carb count for dosing: always check the label or your plan.
           </p>
           <ul className="meal-list">
             {meals.map((m) => (

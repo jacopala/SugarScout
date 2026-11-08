@@ -78,6 +78,15 @@ class Settings(BaseSettings):
     # Set e.g. "sms_account_alerts" on a trial; leave empty once the account is upgraded.
     twilio_trial_template: str = ""
 
+    # Browser push (Web Push / VAPID). Generate with: uv run python scripts/vapid.py
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:alerts@sugarscout.app"
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)
+
     # NVIDIA API catalog (OpenAI-compatible).
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"

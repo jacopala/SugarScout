@@ -6,6 +6,7 @@ import { AlertsPanel, DemoControls, GlucoseHero } from '../../components/Dashboa
 import { LiveChart, WeekChart } from '../../components/GlucoseCharts'
 import { MealsCard } from '../../components/MealsCard'
 import { MoodCard } from '../../components/MoodCard'
+import { PushToggle } from '../../components/PushToggle'
 import { SummaryCard } from '../../components/SummaryCard'
 import { useDemoState, useLive, useWeek } from '../../lib/queries'
 
@@ -24,7 +25,10 @@ export function ParentHome() {
               <img src="/favicon.svg" alt="" />
               SugarScout
             </Link>
-            <ApiStatus />
+            <div className="band-actions">
+              <PushToggle />
+              <ApiStatus />
+            </div>
           </div>
           <div>
             <p className="eyebrow">Parent dashboard</p>

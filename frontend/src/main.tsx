@@ -15,6 +15,11 @@ const queryClient = new QueryClient({
 
 const router = createBrowserRouter(routes)
 
+// Service worker: receives push alerts about the child on the parent's device.
+if ('serviceWorker' in navigator) {
+  void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+}
+
 const root = document.getElementById('root')
 if (!root) throw new Error('#root element missing from index.html')
 

@@ -22,7 +22,19 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from sugarscout.rules.engine import Evaluation, RuleHit
 from sugarscout.settings import Settings
 
-SMS_ON_OPEN = frozenset({"urgent_low", "data_gap", "emergency_language", "help_request"})
+SMS_ON_OPEN = frozenset(
+    {
+        "urgent_low",
+        "predicted_urgent_low",
+        "data_gap",
+        "emergency_language",
+        "help_request",
+        "symptoms_reported",
+    }
+)
+# Rules that describe the same danger share one SMS cooldown, so "urgent low soon"
+# followed by "urgent low" doesn't text the parent twice in a minute.
+SMS_FAMILY: dict[str, str] = {"predicted_urgent_low": "low", "urgent_low": "low"}
 
 RULE_LABELS: dict[str, str] = {
     "urgent_low": "urgent low",
@@ -32,6 +44,10 @@ RULE_LABELS: dict[str, str] = {
     "data_gap": "sensor data gap",
     "emergency_language": "companion safety",
     "help_request": "help request",
+    "predicted_low": "low soon",
+    "predicted_urgent_low": "urgent low soon",
+    "symptoms_reported": "symptoms reported",
+    "agent_heads_up": "Scout heads-up",
 }
 
 
@@ -94,8 +110,9 @@ async def _notify(
     event: AlertEvent,
     dashboard_body: str,
 ) -> int | None:
-    """Write the dashboard notification and, if warranted, a queued SMS. Returns the
-    SMS notification id to deliver, if any."""
+    """Write the dashboard notification, queue a browser push with the real message
+    (delivered by the worker's push outbox), and, if warranted, a queued SMS. Returns
+    the SMS notification id to deliver, if any."""
     await conn.execute(
         text(
             """INSERT INTO notifications (alert_id, channel, kind, body, status, sent_at)
@@ -103,11 +120,19 @@ async def _notify(
         ),
         {"a": event.alert_id, "k": event.kind, "b": dashboard_body},
     )
+    await conn.execute(
+        text(
+            """INSERT INTO notifications (alert_id, channel, kind, recipient, body, status)
+               VALUES (:a, 'push', :k, 'parent devices', :b, 'queued')"""
+        ),
+        {"a": event.alert_id, "k": event.kind, "b": dashboard_body},
+    )
 
     if event.kind == "opened":
         if event.rule_type not in SMS_ON_OPEN:
             return None
-        cooldown_key = f"sms:cooldown:{child_id}:{event.rule_type}"
+        family = SMS_FAMILY.get(event.rule_type, event.rule_type)
+        cooldown_key = f"sms:cooldown:{child_id}:{family}"
         fresh = await redis.set(cooldown_key, "1", nx=True, ex=settings.sms_cooldown_seconds)
         status, error = ("queued", None) if fresh else ("skipped", "cooldown")
     else:
@@ -210,7 +235,9 @@ async def raise_alert(
 
 
 # Alerts no reading can clear: a parent acknowledgement closes them.
-ACK_RESOLVES = frozenset({"emergency_language", "help_request"})
+ACK_RESOLVES = frozenset(
+    {"emergency_language", "help_request", "symptoms_reported", "agent_heads_up"}
+)
 
 
 async def acknowledge(conn: AsyncConnection, alert_id: int) -> dict[str, Any] | None:

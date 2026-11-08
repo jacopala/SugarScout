@@ -1,0 +1,14 @@
+{
+  "name": "SugarScout",
+  "short_name": "SugarScout",
+  "description": "A friendly companion for kids with type 1 diabetes, with alerts for their grown-ups.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F3FB",
+  "theme_color": "#46467A",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

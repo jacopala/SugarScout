@@ -22,6 +22,7 @@ from sugarscout.api.routes import (
     demo,
     glucose,
     health,
+    push,
     summary,
     voice,
 )
@@ -103,6 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(checkins.router)
     app.include_router(voice.router)
     app.include_router(care.router)
+    app.include_router(push.router)
     return app
 
 

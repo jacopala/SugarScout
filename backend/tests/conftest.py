@@ -112,6 +112,8 @@ def settings() -> Iterator[Settings]:
         "PARENT_PHONE",
         "NVIDIA_API_KEY",
         "DEMO_ACCESS_CODE",
+        "VAPID_PUBLIC_KEY",
+        "VAPID_PRIVATE_KEY",
     ):
         os.environ[key] = ""
     get_settings.cache_clear()
