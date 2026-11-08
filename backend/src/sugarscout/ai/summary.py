@@ -92,6 +92,19 @@ async def compute_stats(
             )
         ).one()
 
+        moods = (
+            await conn.execute(
+                text(
+                    """SELECT count(*) AS n, round(avg(mood), 1) AS avg,
+                              count(*) FILTER (WHERE mood <= 2) AS low,
+                              (array_agg(mood ORDER BY created_at DESC))[1] AS latest
+                       FROM mood_checkins
+                       WHERE child_id = :c AND created_at >= now() - make_interval(days => :d)"""
+                ),
+                {"c": child_id, "d": days},
+            )
+        ).one()
+
     n = int(totals.n or 0)
 
     def pct(x: Any) -> float:
@@ -125,6 +138,11 @@ async def compute_stats(
         ],
         "child_chat_messages": int(chat.msgs or 0),
         "companion_safety_escalations": int(chat.emerg or 0),
+        "mood_checkins": int(moods.n or 0),
+        "mood_avg": float(moods.avg) if moods.avg is not None else None,
+        "low_mood_checkins": int(moods.low or 0),
+        "latest_mood": int(moods.latest) if moods.latest is not None else None,
+        "mood_scale": "1 really bad, 2 not great, 3 okay, 4 good, 5 great",
         "range_definitions": {
             "target": "70-180",
             "low": "54-69",

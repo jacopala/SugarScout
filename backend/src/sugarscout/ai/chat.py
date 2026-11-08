@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from sugarscout import mood
 from sugarscout.ai.gateway import ChatModel
 from sugarscout.ai.safety import (
     SAFE_FALLBACK,
@@ -29,6 +31,7 @@ from sugarscout.settings import Settings
 log = get_logger(__name__)
 
 HISTORY_TURNS = 10
+MOOD_CONTEXT_HOURS = 3
 MAX_REPLY_TOKENS = 600  # headroom for reasoning models; the persona keeps replies short
 
 MODEL_DOWN_REPLY = "I'm having a little trouble thinking right now. Can you try again in a moment?"
@@ -37,8 +40,12 @@ AI_OFF_REPLY = "I'm here and listening! (My chatting brain is switched off right
 PERSONA = """You are Scout, a friendly companion for {name}, a child aged {age} who has type 1 diabetes.
 
 How you talk:
-- Simple, kind, cheerful, and SHORT: 1 to 3 short sentences. Words a {age} year old knows.
+- Your replies are SPOKEN ALOUD by a voice, like a smart speaker. Plain sentences only:
+  no emoji, no lists, no symbols, no markdown.
+- Simple, kind, cheerful, and SHORT: 1 or 2 short sentences. Words a {age} year old knows.
 - Ask at most one question at a time.
+- {name} may have misheard words in their message (it came from speech recognition);
+  guess kindly what they meant.
 
 Hard rules:
 - You are not a doctor. Never diagnose. Never give or change insulin doses, carb counts, or treatment. Never promise that someone is safe.
@@ -51,7 +58,8 @@ Hard rules:
 
 Right now:
 - Latest sensor reading: {glucose}.
-- Care-plan reminder to relay: {reminder}"""
+- Care-plan reminder to relay: {reminder}
+- How {name} said they feel: {mood}. If it was low, be extra gentle and check in."""
 
 
 @dataclass(frozen=True)
@@ -77,8 +85,9 @@ async def _store(
 
 async def _context(
     engine: AsyncEngine, child_id: uuid.UUID
-) -> tuple[str, str, list[dict[str, str]]]:
+) -> tuple[str, str, str, list[dict[str, str]]]:
     async with engine.connect() as conn:
+        latest_mood = await mood.latest_within(conn, child_id, hours=MOOD_CONTEXT_HOURS)
         latest = (
             await conn.execute(
                 text(
@@ -126,7 +135,14 @@ async def _context(
         {"role": "user" if r.role == "child" else "assistant", "content": r.content}
         for r in reversed(history)
     ]
-    return glucose, reminder, turns
+    if latest_mood is None:
+        mood_text = "no check-in recently"
+    else:
+        level, at = latest_mood
+        minutes = max(0, int((datetime.now(UTC) - at).total_seconds() // 60))
+        when = "just now" if minutes < 2 else f"about {minutes} minutes ago"
+        mood_text = f"{level} out of 5 ({mood.MOOD_LABELS[level]}), {when}"
+    return glucose, reminder, mood_text, turns
 
 
 async def handle_message(
@@ -159,7 +175,7 @@ async def handle_message(
         return ChatResult(reply, "emergency", True, sms_ids)
 
     # 2. Context assembly (before storing the new message, so history excludes it).
-    glucose, reminder, turns = await _context(engine, child_id)
+    glucose, reminder, mood_text, turns = await _context(engine, child_id)
     await _store(engine, child_id, "child", message, None)
 
     if model is None:
@@ -167,7 +183,11 @@ async def handle_message(
         return ChatResult(AI_OFF_REPLY, "fallback", False, [])
 
     system = PERSONA.format(
-        name=child_name, age=settings.demo_child_age_band, glucose=glucose, reminder=reminder
+        name=child_name,
+        age=settings.demo_child_age_band,
+        glucose=glucose,
+        reminder=reminder,
+        mood=mood_text,
     )
     messages = [{"role": "system", "content": system}, *turns, {"role": "user", "content": message}]
 

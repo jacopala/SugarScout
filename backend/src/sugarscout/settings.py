@@ -88,6 +88,14 @@ class Settings(BaseSettings):
     # budget for the answer (sent as chat_template_kwargs.enable_thinking).
     llm_enable_thinking: bool = False
 
+    # Voice (NVIDIA Riva on NVIDIA's hosted cloud functions; same NVIDIA_API_KEY).
+    voice_enabled: bool = True
+    riva_server: str = "grpc.nvcf.nvidia.com:443"
+    riva_asr_function_id: str = "1598d209-5e27-4d3c-8079-4751568b1081"  # parakeet-ctc-1.1b-asr
+    riva_tts_function_id: str = "877104f7-e885-42b9-8de8-f6e4c6303969"  # magpie-tts-multilingual
+    riva_tts_voice: str = "Magpie-Multilingual.EN-US.Sofia"
+    riva_tts_sample_rate: int = 22_050
+
     @property
     def twilio_configured(self) -> bool:
         return bool(

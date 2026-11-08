@@ -13,7 +13,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 
 from sugarscout.ai.gateway import get_gateway
-from sugarscout.api.routes import alerts, chat, demo, glucose, health, summary
+from sugarscout.ai.speech import get_speech
+from sugarscout.api.routes import (
+    alerts,
+    chat,
+    checkins,
+    demo,
+    glucose,
+    health,
+    summary,
+    voice,
+)
 from sugarscout.db import create_engine, create_sessionmaker
 from sugarscout.log import configure_logging, get_logger
 from sugarscout.settings import Env, Settings, get_settings
@@ -40,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # so the API still starts, and /readyz still reports, when Redis is down.
         app.state.arq = None
         app.state.llm = get_gateway(settings)
+        app.state.speech = get_speech(settings)
         log.info("api.startup")
         try:
             yield
@@ -88,6 +99,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(demo.router)
     app.include_router(chat.router)
     app.include_router(summary.router)
+    app.include_router(checkins.router)
+    app.include_router(voice.router)
     return app
 
 
