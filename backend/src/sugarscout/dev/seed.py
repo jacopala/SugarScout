@@ -94,6 +94,8 @@ async def refresh_aggregates(engine: AsyncEngine, attempts: int = 20) -> None:
             try:
                 async with engine.connect() as conn:
                     conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+                    # Maintenance, not a request: don't apply the per-query timeout.
+                    await conn.execute(text("SET statement_timeout = 0"))
                     await conn.execute(
                         text(f"CALL refresh_continuous_aggregate('{view}', NULL, NULL)")
                     )

@@ -36,6 +36,8 @@ async def seeded(engine: AsyncEngine) -> AsyncIterator[uuid.UUID]:
     await seed(engine, CHILDREN, DAYS, refresh=False)
     async with engine.connect() as conn:
         conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        # Compressing 60 days of chunks is setup, not a measured query; no timeout.
+        await conn.execute(text("SET statement_timeout = 0"))
         chunks = (
             (
                 await conn.execute(
