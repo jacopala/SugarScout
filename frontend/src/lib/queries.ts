@@ -71,3 +71,31 @@ export function useSetScenario() {
     onSuccess: (data) => qc.setQueryData(['demo', 'state'], data),
   })
 }
+
+export interface ChatMessage {
+  id: number
+  role: 'child' | 'companion'
+  content: string
+  flagged: string | null
+  created_at: string
+}
+
+export const useChatHistory = () =>
+  useQuery({
+    queryKey: ['chat', 'history'],
+    queryFn: () => apiGet<ChatMessage[]>('/chat/history'),
+    refetchInterval: 10_000,
+  })
+
+export function useSendChat() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (message: string) =>
+      apiPost<{ reply: string; flagged: string | null; escalated: boolean }>('/chat', { message }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['chat', 'history'] })
+      void qc.invalidateQueries({ queryKey: ['child', 'status'] })
+      void qc.invalidateQueries({ queryKey: ['alerts'] })
+    },
+  })
+}

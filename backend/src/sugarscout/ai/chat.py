@@ -1,0 +1,191 @@
+"""Child chat pipeline (Section 5.2): pre-filter -> context -> Nano -> post-filter -> log.
+
+The model only words things. Emergencies are detected by deterministic rules before the
+model sees the message, and they escalate through the same alert path as glucose rules.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+
+from redis.asyncio import Redis
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from sugarscout.ai.gateway import ChatModel
+from sugarscout.ai.safety import (
+    SAFE_FALLBACK,
+    SCRIPTED_REPLIES,
+    check_output,
+    detect_emergency,
+)
+from sugarscout.alerts.service import raise_alert
+from sugarscout.demo import CHILD_REMINDERS, REMINDER_PRIORITY
+from sugarscout.log import get_logger
+from sugarscout.rules.engine import URGENT, RuleHit
+from sugarscout.settings import Settings
+
+log = get_logger(__name__)
+
+HISTORY_TURNS = 10
+MAX_REPLY_TOKENS = 600  # headroom for reasoning models; the persona keeps replies short
+
+MODEL_DOWN_REPLY = "I'm having a little trouble thinking right now. Can you try again in a moment?"
+AI_OFF_REPLY = "I'm here and listening! (My chatting brain is switched off right now.)"
+
+PERSONA = """You are Scout, a friendly companion for {name}, a child aged {age} who has type 1 diabetes.
+
+How you talk:
+- Simple, kind, cheerful, and SHORT: 1 to 3 short sentences. Words a {age} year old knows.
+- Ask at most one question at a time.
+
+Hard rules:
+- You are not a doctor. Never diagnose. Never give or change insulin doses, carb counts, or treatment. Never promise that someone is safe.
+- For anything medical, say to follow their care plan and tell a grown-up.
+- Never ask for their full name, address, school, phone number, or photos.
+- If something feels wrong, scary, or unsafe, encourage them to tell a trusted grown-up right away.
+- If you are unsure, say so and suggest talking to a grown-up.
+- Gently steer off-topic or grown-up topics back to friendly chat.
+- Do not mention glucose numbers unless {name} asks, and never say what a number means.
+
+Right now:
+- Latest sensor reading: {glucose}.
+- Care-plan reminder to relay: {reminder}"""
+
+
+@dataclass(frozen=True)
+class ChatResult:
+    reply: str
+    flagged: str | None  # emergency | filtered | fallback | None
+    escalated: bool
+    sms_ids: list[int]
+
+
+async def _store(
+    engine: AsyncEngine, child_id: uuid.UUID, role: str, content: str, flagged: str | None
+) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """INSERT INTO chat_messages (child_id, role, content, flagged)
+                   VALUES (:c, :r, :t, :f)"""
+            ),
+            {"c": child_id, "r": role, "t": content, "f": flagged},
+        )
+
+
+async def _context(
+    engine: AsyncEngine, child_id: uuid.UUID
+) -> tuple[str, str, list[dict[str, str]]]:
+    async with engine.connect() as conn:
+        latest = (
+            await conn.execute(
+                text(
+                    """SELECT value_mg_dl, trend, now() - ts AS age FROM glucose_readings
+                       WHERE child_id = :c ORDER BY ts DESC LIMIT 1"""
+                ),
+                {"c": child_id},
+            )
+        ).first()
+        active = set(
+            (
+                await conn.execute(
+                    text(
+                        "SELECT rule_type FROM alerts WHERE child_id = :c AND state <> 'resolved'"
+                    ),
+                    {"c": child_id},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        history = (
+            await conn.execute(
+                text(
+                    """SELECT role, content FROM chat_messages WHERE child_id = :c
+                       ORDER BY created_at DESC, id DESC LIMIT :n"""
+                ),
+                {"c": child_id, "n": HISTORY_TURNS},
+            )
+        ).all()
+
+    glucose = (
+        f"{latest.value_mg_dl} mg/dL, trend {latest.trend or 'unknown'}"
+        if latest is not None and latest.age.total_seconds() < 120
+        else "not available right now"
+    )
+    rule = next((r for r in REMINDER_PRIORITY if r in active), None)
+    reminder = (
+        f'"{CHILD_REMINDERS[rule]}" Mention it gently in your reply.' if rule else "none right now."
+    )
+    turns = [
+        {"role": "user" if r.role == "child" else "assistant", "content": r.content}
+        for r in reversed(history)
+    ]
+    return glucose, reminder, turns
+
+
+async def handle_message(
+    engine: AsyncEngine,
+    redis: Redis,
+    settings: Settings,
+    model: ChatModel | None,
+    child_id: uuid.UUID,
+    child_name: str,
+    message: str,
+) -> ChatResult:
+    message = message.strip()
+
+    # 1. Pre-filter: emergency language bypasses the model entirely.
+    emergency = detect_emergency(message)
+    if emergency is not None:
+        await _store(engine, child_id, "child", message, "emergency")
+        reply = SCRIPTED_REPLIES[emergency.category]
+        hit = RuleHit(
+            "emergency_language",
+            URGENT,
+            f"{child_name} wrote something in the companion that needs attention "
+            f"({emergency.category.replace('_', ' ')}).",
+            {"category": emergency.category, "pattern": emergency.pattern, "message": message},
+        )
+        async with engine.begin() as conn:
+            alert_id, sms_ids = await raise_alert(conn, redis, settings, child_id, child_name, hit)
+        await _store(engine, child_id, "companion", reply, "emergency")
+        log.warning("chat.emergency", category=emergency.category, alert_id=alert_id)
+        return ChatResult(reply, "emergency", True, sms_ids)
+
+    # 2. Context assembly (before storing the new message, so history excludes it).
+    glucose, reminder, turns = await _context(engine, child_id)
+    await _store(engine, child_id, "child", message, None)
+
+    if model is None:
+        await _store(engine, child_id, "companion", AI_OFF_REPLY, "fallback")
+        return ChatResult(AI_OFF_REPLY, "fallback", False, [])
+
+    system = PERSONA.format(
+        name=child_name, age=settings.demo_child_age_band, glucose=glucose, reminder=reminder
+    )
+    messages = [{"role": "system", "content": system}, *turns, {"role": "user", "content": message}]
+
+    # 3. Generation.
+    try:
+        reply = await model.complete(
+            settings.nemotron_chat_model, messages, max_tokens=MAX_REPLY_TOKENS, temperature=0.6
+        )
+    except Exception as exc:
+        log.warning("chat.model_error", error=repr(exc))
+        await _store(engine, child_id, "companion", MODEL_DOWN_REPLY, "fallback")
+        return ChatResult(MODEL_DOWN_REPLY, "fallback", False, [])
+
+    # 4. Post-filter.
+    flagged: str | None = None
+    if not reply:
+        reply, flagged = MODEL_DOWN_REPLY, "fallback"
+    elif (matched := check_output(reply)) is not None:
+        log.warning("chat.output_filtered", pattern=matched, original=reply)
+        reply, flagged = SAFE_FALLBACK, "filtered"
+
+    # 5. Logging.
+    await _store(engine, child_id, "companion", reply, flagged)
+    return ChatResult(reply, flagged, False, [])

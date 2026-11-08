@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # NVIDIA API catalog (OpenAI-compatible).
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
-    nemotron_chat_model: str = "nvidia/nemotron-3-nano-30b-a3b"
+    nemotron_chat_model: str = "nvidia/nemotron-nano-3-30b-a3b"
     nemotron_analysis_model: str = "nvidia/nemotron-3-super-120b-a12b"
     llm_timeout_s: float = 20.0
 
