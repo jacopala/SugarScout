@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from sugarscout.ai.chat import handle_message
-from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, deliver_now
+from sugarscout.api.deps import (
+    DemoKey,
+    EngineDep,
+    RedisDep,
+    SettingsDep,
+    concern_fields,
+    deliver_now,
+)
 from sugarscout.demo import DEMO_CHILD_ID
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -24,6 +31,9 @@ class ChatOut(BaseModel):
     flagged: str | None
     escalated: bool
     emotion: str = "neutral"
+    concern_level: str = "none"  # none | mild | moderate | high
+    suggest_call: bool = False
+    guardian_phone: str | None = None
 
 
 class MessageOut(BaseModel):
@@ -70,4 +80,5 @@ async def chat(
         flagged=result.flagged,
         escalated=result.escalated,
         emotion=result.emotion,
+        **concern_fields(result.concern, settings),
     )

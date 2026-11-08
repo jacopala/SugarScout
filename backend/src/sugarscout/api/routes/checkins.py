@@ -9,7 +9,8 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from sugarscout import mood
-from sugarscout.api.deps import DemoKey, EngineDep
+from sugarscout.ai.concern import from_mood
+from sugarscout.api.deps import DemoKey, EngineDep, SettingsDep, concern_fields
 from sugarscout.demo import DEMO_CHILD_ID
 
 router = APIRouter(prefix="/checkins", tags=["checkins"])
@@ -33,13 +34,21 @@ class CheckinOut(BaseModel):
 class CheckinCreated(CheckinOut):
     reply: str
     emotion: str
+    concern_level: str = "none"
+    suggest_call: bool = False
+    guardian_phone: str | None = None
 
 
 @router.post("", response_model=CheckinCreated, dependencies=[DemoKey])
-async def create(body: CheckinIn, engine: EngineDep) -> CheckinCreated:
+async def create(body: CheckinIn, engine: EngineDep, settings: SettingsDep) -> CheckinCreated:
     row = await mood.record(engine, DEMO_CHILD_ID, body.mood, body.source, body.context)
     return CheckinCreated.model_validate(
-        {**row, "reply": mood.MOOD_REPLIES[body.mood], "emotion": mood.MOOD_EMOTIONS[body.mood]}
+        {
+            **row,
+            "reply": mood.MOOD_REPLIES[body.mood],
+            "emotion": mood.MOOD_EMOTIONS[body.mood],
+            **concern_fields(from_mood(body.mood), settings),
+        }
     )
 
 

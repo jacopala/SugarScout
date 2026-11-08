@@ -8,6 +8,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Demo over an HTTPS tunnel (`cloudflared tunnel --url ...`) so phones get push and
+    // the mic. `vite preview` inherits this and the /api proxy below.
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
         target: process.env.VITE_DEV_API_TARGET ?? 'http://localhost:8000',

@@ -10,6 +10,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from sugarscout.ai.concern import Concern
 from sugarscout.settings import Settings
 
 
@@ -71,3 +72,13 @@ async def deliver_now(request: Request, sms_ids: Iterable[int] = ()) -> None:
     for nid in sms_ids:
         await enqueue(request, "send_sms", nid)
     await enqueue(request, "push_now")
+
+
+def concern_fields(concern: Concern, settings: Settings) -> dict[str, object]:
+    """What the child's screen needs to offer a call. The parent's number goes only
+    to callers that passed the access code, and only when a call is suggested."""
+    return {
+        "concern_level": concern.level,
+        "suggest_call": concern.suggest_call,
+        "guardian_phone": (settings.parent_phone or None) if concern.suggest_call else None,
+    }

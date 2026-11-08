@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sugarscout import mood
+from sugarscout.ai import concern as concern_mod
 from sugarscout.ai.gateway import ChatModel
 from sugarscout.ai.safety import (
     SAFE_FALLBACK,
@@ -26,7 +27,7 @@ from sugarscout.ai.safety import (
 from sugarscout.alerts.service import raise_alert
 from sugarscout.demo import CHILD_REMINDERS, REMINDER_PRIORITY
 from sugarscout.log import get_logger
-from sugarscout.rules.engine import URGENT, RuleHit
+from sugarscout.rules.engine import URGENT, WARNING, RuleHit
 from sugarscout.settings import Settings
 
 log = get_logger(__name__)
@@ -87,6 +88,7 @@ class ChatResult:
     escalated: bool
     sms_ids: list[int]
     emotion: str = "neutral"  # how Scout's voice should sound (ai/speech.py)
+    concern: concern_mod.Concern = field(default_factory=concern_mod.Concern)
 
 
 async def _store(
@@ -102,9 +104,14 @@ async def _store(
         )
 
 
+# Open alerts that mean glucose is low or heading there (body worries weigh more).
+_LOW_RULES = frozenset({"urgent_low", "low", "predicted_low", "predicted_urgent_low", "rapid_drop"})
+LOW_CONTEXT_MG_DL = 80
+
+
 async def _context(
     engine: AsyncEngine, child_id: uuid.UUID
-) -> tuple[str, str, str, list[dict[str, str]]]:
+) -> tuple[str, str, str, list[dict[str, str]], bool]:
     async with engine.connect() as conn:
         latest_mood = await mood.latest_within(conn, child_id, hours=MOOD_CONTEXT_HOURS)
         latest = (
@@ -141,10 +148,14 @@ async def _context(
             )
         ).all()
 
+    fresh = latest is not None and latest.age.total_seconds() < 120
     glucose = (
         f"{latest.value_mg_dl} mg/dL, trend {latest.trend or 'unknown'}"
-        if latest is not None and latest.age.total_seconds() < 120
+        if latest is not None and fresh
         else "not available right now"
+    )
+    low_context = bool(active & _LOW_RULES) or (
+        latest is not None and fresh and latest.value_mg_dl < LOW_CONTEXT_MG_DL
     )
     rule = next((r for r in REMINDER_PRIORITY if r in active), None)
     reminder = (
@@ -161,7 +172,7 @@ async def _context(
         minutes = max(0, int((datetime.now(UTC) - at).total_seconds() // 60))
         when = "just now" if minutes < 2 else f"about {minutes} minutes ago"
         mood_text = f"{level} out of 5 ({mood.MOOD_LABELS[level]}), {when}"
-    return glucose, reminder, mood_text, turns
+    return glucose, reminder, mood_text, turns, low_context
 
 
 async def handle_message(
@@ -194,12 +205,50 @@ async def handle_message(
         return ChatResult(reply, "emergency", True, sms_ids, emotion="calm")
 
     # 2. Context assembly (before storing the new message, so history excludes it).
-    glucose, reminder, mood_text, turns = await _context(engine, child_id)
+    glucose, reminder, mood_text, turns, low_context = await _context(engine, child_id)
     await _store(engine, child_id, "child", message, None)
 
+    # 3. Concern weight (deterministic): decides the call suggestion and parent heads-up.
+    worry = concern_mod.assess(message, glucose_low_or_falling=low_context)
+    concern_sms: list[int] = []
+    if worry.notify_parent:
+        hit = RuleHit(
+            "child_concern",
+            WARNING,
+            f"{child_name} sounded {', '.join(worry.signals)} while talking to Scout.",
+            {"score": worry.score, "signals": worry.signals, "message": message},
+        )
+        async with engine.begin() as conn:
+            _, concern_sms = await raise_alert(conn, redis, settings, child_id, child_name, hit)
+        log.info("chat.concern_alert", score=worry.score, signals=worry.signals)
+
+    reply, flagged, emotion = await _generate(
+        model, settings, child_name, message, glucose, reminder, mood_text, turns, worry
+    )
+    if worry.suggest_call:
+        reply = f"{reply} {concern_mod.CALL_SUGGESTION}"
+        if emotion == "happy":
+            emotion = "calm"
+
+    # 6. Logging (stored without the tone tag).
+    await _store(engine, child_id, "companion", reply, flagged)
+    return ChatResult(reply, flagged, False, concern_sms, emotion=emotion, concern=worry)
+
+
+async def _generate(
+    model: ChatModel | None,
+    settings: Settings,
+    child_name: str,
+    message: str,
+    glucose: str,
+    reminder: str,
+    mood_text: str,
+    turns: list[dict[str, str]],
+    worry: concern_mod.Concern,
+) -> tuple[str, str | None, str]:
+    """Scout's words: (reply, flagged, emotion). The model only words things."""
     if model is None:
-        await _store(engine, child_id, "companion", AI_OFF_REPLY, "fallback")
-        return ChatResult(AI_OFF_REPLY, "fallback", False, [], emotion="happy")
+        return AI_OFF_REPLY, "fallback", "happy"
 
     system = PERSONA.format(
         name=child_name,
@@ -208,29 +257,49 @@ async def handle_message(
         reminder=reminder,
         mood=mood_text,
     )
+    if worry.level != "none":
+        system += (
+            f"\n- {child_name} sounds {', '.join(worry.signals)}. Use [calm], name the feeling "
+            "kindly in one short sentence, and do not ask about it again."
+        )
+        if worry.suggest_call:
+            system += (
+                " Reply with ONE short sentence only. Do not mention calling, phones, the app,"
+                " or what happens next: a fixed line after yours offers the call."
+            )
     messages = [{"role": "system", "content": system}, *turns, {"role": "user", "content": message}]
 
-    # 3. Generation.
+    # 4. Generation.
     try:
-        reply = await model.complete(
+        raw = await model.complete(
             settings.nemotron_chat_model, messages, max_tokens=MAX_REPLY_TOKENS, temperature=0.6
         )
     except Exception as exc:
         log.warning("chat.model_error", error=repr(exc))
-        await _store(engine, child_id, "companion", MODEL_DOWN_REPLY, "fallback")
-        return ChatResult(MODEL_DOWN_REPLY, "fallback", False, [], emotion="calm")
+        return MODEL_DOWN_REPLY, "fallback", "calm"
 
-    # 4. Tone tag, then post-filter.
-    emotion, reply = split_tone(reply)
-    if reminder != NO_REMINDER and emotion == "happy":
-        emotion = "calm"  # never sound cheerful while relaying a care-plan reminder
-    flagged: str | None = None
+    # 5. Tone tag, then post-filter.
+    emotion, reply = split_tone(raw)
+    if (reminder != NO_REMINDER or worry.level != "none") and emotion == "happy":
+        emotion = "calm"  # never sound cheerful while relaying a reminder or a worry
     if not reply:
-        reply, flagged, emotion = MODEL_DOWN_REPLY, "fallback", "calm"
-    elif (matched := check_output(reply)) is not None:
+        return MODEL_DOWN_REPLY, "fallback", "calm"
+    if (matched := check_output(reply)) is not None:
         log.warning("chat.output_filtered", pattern=matched, original=reply)
-        reply, flagged, emotion = SAFE_FALLBACK, "filtered", "calm"
+        return SAFE_FALLBACK, "filtered", "calm"
+    if worry.suggest_call:
+        # The call offer must stand out: keep only Scout's first sentence, and drop it
+        # if the model talked about calling anyway (the fixed line does that).
+        reply = first_sentence(reply)
+        if _CALL_TALK.search(reply.lower()):
+            reply = CONCERN_ACK
+    return reply, None, emotion
 
-    # 5. Logging (stored without the tone tag).
-    await _store(engine, child_id, "companion", reply, flagged)
-    return ChatResult(reply, flagged, False, [], emotion=emotion)
+
+CONCERN_ACK = "I'm right here with you."
+_CALL_TALK = re.compile(r"\b(call|phone|ring|dial|the app)\b")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def first_sentence(text: str) -> str:
+    return _SENTENCE_END.split(text.strip(), maxsplit=1)[0].strip()

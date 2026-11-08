@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
+import { Fireworks } from '../../components/Fireworks'
 import { HelpButton } from '../../components/HelpButton'
 import { MoodFace } from '../../components/MoodFace'
 import { MOODS, moodInfo } from '../../lib/mood'
@@ -12,18 +13,30 @@ const dayPart = () => {
   return `${day} ${h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'}`
 }
 
+/** Peaceful (4) and Happy (5) get fireworks; the other faces never do. */
+const HAPPY_FROM = 4
+
 /** The child's landing page: pick a face on the mood bar, then "That's me". */
 export function MoodCheck() {
   const status = useChildStatus()
   const create = useCreateCheckin()
   const navigate = useNavigate()
   const [mood, setMood] = useState<number | null>(null)
+  // Each happy tap restarts the show (a new key remounts the canvas).
+  const [show, setShow] = useState(0)
   const name = status.data?.first_name
 
   function confirm() {
     if (mood === null || create.isPending) return
     create.mutate(mood, {
-      onSuccess: (data) => navigate('/child/scout', { state: { greeting: data.reply, emotion: data.emotion } }),
+      onSuccess: (data) =>
+        navigate('/child/scout', {
+          state: {
+            greeting: data.reply,
+            emotion: data.emotion,
+            callOffer: data.suggest_call ? { phone: data.guardian_phone ?? null } : null,
+          },
+        }),
     })
   }
 
@@ -61,7 +74,10 @@ export function MoodCheck() {
               className="mood-bar-item"
               aria-pressed={mood === m.value}
               aria-label={`${m.value} out of 5: ${m.label}`}
-              onClick={() => setMood(m.value)}
+              onClick={() => {
+                setMood(m.value)
+                if (m.value >= HAPPY_FROM) setShow((n) => n + 1)
+              }}
             >
               <MoodFace mood={m.value} size={44} />
             </button>
@@ -82,6 +98,7 @@ export function MoodCheck() {
           </Link>
         </div>
       </div>
+      {show > 0 ? <Fireworks key={show} onDone={() => setShow(0)} /> : null}
     </main>
   )
 }

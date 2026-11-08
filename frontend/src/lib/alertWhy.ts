@@ -12,6 +12,9 @@ export function alertWhy(alert: AlertOut): string[] {
     symptom?: string
     category?: string
     reasons?: string[]
+    signals?: string[]
+    score?: number
+    message?: string
     source?: string
   }
   const lines: string[] = []
@@ -54,6 +57,11 @@ export function alertWhy(alert: AlertOut): string[] {
       break
     case 'emergency_language':
       if (t.category) lines.push(`Scout heard words about ${t.category.replace('_', ' ')}; the AI was skipped`)
+      break
+    case 'child_concern':
+      if (t.signals?.length) lines.push(`Alex sounded ${t.signals.join(', ')} (concern score ${t.score ?? '?'})`)
+      if (t.message) lines.push(`Alex said: “${t.message}”`)
+      lines.push('Scout offered to call you. Fixed word rules decided this, not the AI.')
       break
     case 'agent_heads_up':
       for (const r of t.reasons ?? []) lines.push(r)
