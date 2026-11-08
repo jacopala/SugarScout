@@ -19,6 +19,7 @@ from arq import cron
 from arq.connections import RedisSettings
 from sqlalchemy import text
 
+from sugarscout.agent.agent import run_agent
 from sugarscout.ai.gateway import get_gateway
 from sugarscout.ai.meals import analyze_meal as run_meal_analysis
 from sugarscout.db import create_engine
@@ -83,6 +84,17 @@ async def send_sms(ctx: dict[str, Any], notification_id: int) -> str:
     return await deliver(ctx["engine"], ctx["settings"], notification_id)
 
 
+async def agent_tick(ctx: dict[str, Any]) -> str:
+    """One Scout agent step: what to ask the child, and whether to give the parent a
+    non-urgent heads-up. Urgent alerts stay with the rules engine."""
+    d, sms_ids = await run_agent(
+        ctx["engine"], ctx["redis"], ctx["settings"], ctx["llm"], DEMO_CHILD_ID, datetime.now(UTC)
+    )
+    for nid in sms_ids:
+        await ctx["redis"].enqueue_job("send_sms", nid)
+    return d.status
+
+
 async def push_outbox(ctx: dict[str, Any]) -> int:
     """Deliver queued browser pushes (every alert open/resolve queues one)."""
     s = ctx["settings"]
@@ -113,10 +125,11 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(str(get_settings().redis_url))
     on_startup = startup
     on_shutdown = shutdown
-    functions: ClassVar[list[Any]] = [send_sms, analyze_meal]
+    functions: ClassVar[list[Any]] = [send_sms, analyze_meal, agent_tick]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, second=0, run_at_startup=True, timeout=30, unique=True),  # every minute
         cron(cgm_tick, second=_TICK_SECONDS, timeout=10, unique=True, keep_result=0),
+        cron(agent_tick, second={0, 15, 30, 45}, timeout=40, unique=True, keep_result=0),
         cron(push_outbox, second=set(range(0, 60, 2)), timeout=20, unique=True, keep_result=0),
     ]
     max_jobs = 10

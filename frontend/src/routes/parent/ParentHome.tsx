@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 
 import { AccessGate } from '../../components/AccessGate'
+import { AgentTimeline } from '../../components/AgentTimeline'
 import { ApiStatus } from '../../components/ApiStatus'
 import { AlertsPanel, DemoControls, GlucoseHero } from '../../components/Dashboard'
 import { LiveChart, WeekChart } from '../../components/GlucoseCharts'
@@ -63,6 +64,7 @@ export function ParentHome() {
           <aside className="dash-side">
             <DemoControls />
             <AlertsPanel />
+            <AgentTimeline />
             <MealsCard />
             <InsulinCard />
             <MoodCard />

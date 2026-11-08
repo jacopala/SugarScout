@@ -183,4 +183,6 @@ export interface VoiceTurn {
   escalated: boolean
   audio: string | null
   emotion: string
+  answered_question?: boolean
+  open_meals?: boolean
 }

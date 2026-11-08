@@ -12,6 +12,8 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from sugarscout.agent.answers import answer_question, pending_question
+from sugarscout.agent.questions import match_answer
 from sugarscout.ai.chat import handle_message
 from sugarscout.ai.speech import Emotion, speak, wav_to_pcm16k
 from sugarscout.ai.wake import parse_wake
@@ -37,6 +39,8 @@ class VoiceTurnOut(BaseModel):
     escalated: bool = False
     audio: str | None = None  # base64 WAV; None means "use the browser's voice"
     emotion: str = "neutral"
+    answered_question: bool = False
+    open_meals: bool = False
 
 
 class SpeakIn(BaseModel):
@@ -73,6 +77,30 @@ async def turn(
     except Exception as exc:
         log.warning("voice.asr_failed", error=repr(exc))
         raise HTTPException(502, "Speech recognition failed") from exc
+
+    # A pending Scout question can be answered out loud without the wake phrase.
+    pending = await pending_question(engine, DEMO_CHILD_ID)
+    if pending is not None:
+        _, spoken = parse_wake(transcript)
+        value = match_answer(pending["question"], spoken or transcript)
+        if value is not None:
+            answered = await answer_question(
+                engine, redis, settings, DEMO_CHILD_ID, pending["id"], value
+            )
+            for nid in answered.sms_ids:
+                await enqueue(request, "send_sms", nid)
+            await enqueue(request, "agent_tick")
+            audio = await speak(speech, redis, settings, answered.reply, answered.emotion)
+            return VoiceTurnOut(
+                heard=True,
+                woke=False,
+                transcript=transcript.strip(),
+                reply=answered.reply,
+                audio=audio,
+                emotion=answered.emotion,
+                answered_question=True,
+                open_meals=answered.open_meals,
+            )
 
     woke, command = parse_wake(transcript)
     if not woke and not awake:

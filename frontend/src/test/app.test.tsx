@@ -75,6 +75,10 @@ function mockApi(overrides: Routes = {}) {
     '/api/summary': { body: null },
     '/api/checkins': { body: [] },
     '/api/meals': { body: [] },
+    '/api/agent/question': { body: null },
+    '/api/agent/timeline': { body: [] },
+    '/api/insulin': { body: [] },
+    '/api/glucose/forecast': { body: { made_at: null, predicted: null, horizon_min: null, slope_per_5min: null, mae_24h: null, scored_24h: 0 } },
     ...overrides,
   }
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -299,5 +303,67 @@ describe('child safety and meals', () => {
     expect(screen.getByText('Contains gluten')).toBeInTheDocument()
     expect(screen.getByText('Glucose 1 h later: 168')).toBeInTheDocument()
     expect(screen.getByText(/Not a carb count for dosing/)).toBeInTheDocument()
+  })
+})
+
+describe('Scout agent', () => {
+  it('shows Scout\'s question and sends the tapped answer', async () => {
+    const fetchSpy = mockApi({
+      '/api/agent/question': {
+        body: {
+          id: 42,
+          question: 'insulin_with_meal',
+          kind: 'choice',
+          wording: 'Did you have your insulin with your snack?',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'not_yet', label: 'Not yet' },
+            { value: 'dont_know', label: "I don't know" },
+          ],
+          asked_at: new Date().toISOString(),
+        },
+      },
+      'POST /api/agent/answer': {
+        body: { reply: "Okay, thanks for telling me. Let's check your plan with a grown-up.", emotion: 'calm', open_meals: false },
+      },
+      'POST /api/voice/speak': { body: { audio: null } },
+    })
+    renderAt('/child/scout')
+    expect(await screen.findByRole('heading', { name: 'Did you have your insulin with your snack?' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Not yet' }))
+    expect(await screen.findByText("Okay, thanks for telling me. Let's check your plan with a grown-up.")).toBeInTheDocument()
+    const post = fetchSpy.mock.calls.find(([url, init]) => String(url) === '/api/agent/answer' && init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ question_id: 42, answer: 'not_yet' })
+  })
+
+  it('shows the parent what the agent asked and why it sent a heads-up', async () => {
+    mockApi({
+      '/api/agent/timeline': {
+        body: [
+          {
+            at: new Date().toISOString(),
+            type: 'heads_up',
+            text: 'Alex is rising (214) after ~54 g carbs and no insulin is logged.',
+            reasons: ['rising after a snack'],
+            answer: null,
+            answered_at: null,
+            state: 'open',
+          },
+          {
+            at: new Date().toISOString(),
+            type: 'asked',
+            text: 'Did you have your insulin with your snack?',
+            reasons: [],
+            answer: 'Not yet',
+            answered_at: new Date().toISOString(),
+            state: null,
+          },
+        ],
+      },
+    })
+    renderAt('/parent')
+    expect(await screen.findByText('Alex is rising (214) after ~54 g carbs and no insulin is logged.')).toBeInTheDocument()
+    expect(screen.getByText('rising after a snack')).toBeInTheDocument()
+    expect(screen.getByText('Not yet')).toBeInTheDocument()
   })
 })

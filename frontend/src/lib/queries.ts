@@ -263,3 +263,50 @@ export function useDemoEvent() {
     mutationFn: (kind: 'snack_no_insulin' | 'exercise') => apiPost('/demo/event', { kind }),
   })
 }
+
+// ---- Scout agent ---------------------------------------------------------------------
+
+export interface AgentQuestion {
+  id: number
+  question: string
+  kind: 'choice' | 'mood'
+  wording: string
+  options: { value: string; label: string }[]
+  asked_at: string
+}
+
+export interface TimelineItem {
+  at: string
+  type: 'asked' | 'heads_up'
+  text: string
+  reasons: string[]
+  answer: string | null
+  answered_at: string | null
+  state: string | null
+}
+
+export const useAgentQuestion = () =>
+  useQuery({
+    queryKey: ['agent', 'question'],
+    queryFn: () => apiGet<AgentQuestion | null>('/agent/question'),
+    refetchInterval: LIVE_POLL_MS,
+  })
+
+export const useAgentTimeline = () =>
+  useQuery({
+    queryKey: ['agent', 'timeline'],
+    queryFn: () => apiGet<TimelineItem[]>('/agent/timeline'),
+    refetchInterval: 5_000,
+  })
+
+export function useAnswerQuestion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { question_id: number; answer: string }) =>
+      apiPost<{ reply: string; emotion: string; open_meals: boolean }>('/agent/answer', body),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['agent'] })
+      void qc.invalidateQueries({ queryKey: ['child', 'status'] })
+    },
+  })
+}

@@ -15,6 +15,7 @@ from redis.asyncio import Redis
 from sugarscout.ai.gateway import get_gateway
 from sugarscout.ai.speech import get_speech
 from sugarscout.api.routes import (
+    agent,
     alerts,
     care,
     chat,
@@ -107,6 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(care.router)
     app.include_router(push.router)
     app.include_router(insulin.router)
+    app.include_router(agent.router)
     return app
 
 

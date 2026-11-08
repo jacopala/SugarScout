@@ -13,8 +13,9 @@ import {
   SmileIcon,
 } from '../../components/Icons'
 import { MealSheet } from '../../components/MealSheet'
+import { QuestionCard } from '../../components/QuestionCard'
 import type { VoiceTurn } from '../../lib/api'
-import { useChildStatus, useSendChat } from '../../lib/queries'
+import { useAgentQuestion, useAnswerQuestion, useChildStatus, useSendChat } from '../../lib/queries'
 import { useScoutVoice, type VoiceState } from '../../lib/voice/useScoutVoice'
 
 const DOUBLE_TAP_MS = 320
@@ -51,10 +52,43 @@ export function ScoutDisplay() {
   const greeted = useRef(false)
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const question = useAgentQuestion()
+  const answer = useAnswerQuestion()
+  const spokenQuestion = useRef<number | null>(null)
+
   const voice = useScoutVoice((turn: VoiceTurn) => {
     setCaption({ you: turn.transcript, scout: turn.reply })
-    if (turn.escalated) void qc.invalidateQueries({ queryKey: ['child', 'status'] })
+    if (turn.escalated || turn.answered_question) {
+      void qc.invalidateQueries({ queryKey: ['child', 'status'] })
+      void qc.invalidateQueries({ queryKey: ['agent'] })
+    }
+    if (turn.open_meals) setMeals(true)
   })
+
+  // Scout reads each new agent question out loud once.
+  const q = question.data
+  useEffect(() => {
+    if (q && spokenQuestion.current !== q.id && !meals) {
+      spokenQuestion.current = q.id
+      setCaption({ you: null, scout: q.wording })
+      void voice.say(q.wording, 'neutral')
+    }
+  }, [q, meals, voice])
+
+  function onAnswer(value: string) {
+    if (!q) return
+    const label = q.options.find((o) => o.value === value)?.label ?? value
+    answer.mutate(
+      { question_id: q.id, answer: value },
+      {
+        onSuccess: (data) => {
+          setCaption({ you: label, scout: data.reply })
+          void voice.say(data.reply, data.emotion)
+          if (data.open_meals) setMeals(true)
+        },
+      },
+    )
+  }
 
   // Scout says the mood (or help) reply out loud when the display opens.
   useEffect(() => {
@@ -138,6 +172,8 @@ export function ScoutDisplay() {
             <p>{status.data.reminder}</p>
           </div>
         ) : null}
+
+        {q ? <QuestionCard question={q} onAnswer={onAnswer} busy={answer.isPending} /> : null}
 
         <div className="mic-zone">
           {voice.supported ? (

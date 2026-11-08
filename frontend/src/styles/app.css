@@ -1297,3 +1297,106 @@ input[type='password'] {
   color: var(--text-strong);
   box-shadow: inset 0 1px 3px rgba(31, 31, 61, 0.1);
 }
+
+/* ---- Scout agent: child question card ---------------------------------------------- */
+.question-card {
+  align-self: stretch;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 2px 4px rgba(119, 102, 198, 0.12), 0 12px 30px rgba(119, 102, 198, 0.22);
+  display: grid;
+  gap: var(--space-3);
+}
+.question-eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--violet);
+}
+.question-text {
+  margin: 0;
+  font-size: clamp(1.25rem, 5vw, 1.5rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.question-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-2);
+}
+.question-option {
+  border: none;
+  cursor: pointer;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  background: var(--lavender);
+  color: var(--indigo);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow: 0 3px 10px rgba(70, 70, 122, 0.12);
+}
+.question-option:hover:not(:disabled) {
+  background: var(--indigo);
+  color: #fff;
+}
+.question-moods {
+  display: flex;
+  justify-content: space-between;
+  border-radius: 999px;
+  background: var(--bg);
+  padding: 4px;
+}
+.question-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* ---- Scout agent: parent timeline ------------------------------------------------------ */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.timeline-item {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: var(--space-3);
+}
+.timeline-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--lavender);
+  color: var(--violet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.timeline-item[data-type='heads_up'] .timeline-dot {
+  background: var(--sun-tint);
+  color: var(--sun-ink);
+}
+.timeline-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.timeline-text {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.timeline-answer {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
