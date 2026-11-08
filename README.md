@@ -169,22 +169,3 @@ Nothing has been provisioned yet. These steps need your accounts:
    Migrations run as the API's pre-deploy command.
 3. **Vercel.** Import the repository with root directory `frontend`, and set `VITE_API_BASE_URL` to the Render API URL.
 4. **Check.** `GET https://<api>/readyz` should return `"status": "ok"` with a recent worker heartbeat.
-
-## Phase 1 gate (pre-hackathon plan)
-
-- [x] Migrations run cleanly and round-trip locally (`test_migrations.py`)
-- [x] Query budgets pass locally (all well under 1 ms of execution time)
-- [x] API, worker, and frontend run end to end locally
-- [ ] Migrations run cleanly on the **Tiger Cloud staging** service
-- [ ] Measured query times meet Section 18.6 targets **on staging**:
-  ```bash
-  TEST_DATABASE_URL=<staging url> TEST_EXTERNAL_DB=1 DB_SSL_MODE=require uv run pytest -m budget
-  ```
-- [ ] Round-trip time recorded from Render in each candidate region: `uv run python scripts/rtt.py` from a Render shell
-- [ ] Hello-world deployments live on Vercel and Render staging
-
-Record staging measurements here:
-
-| Date | Region | RTT p50 / p95 | Rules query exec / wall | Month view exec / wall |
-| --- | --- | --- | --- | --- |
-| | | | | |
