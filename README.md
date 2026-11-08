@@ -238,23 +238,15 @@ Migration `0001` uses the `enable_columnstore` / `add_columnstore_policy` syntax
 - **Latency and data use:** after an event or heads-up, the API queues an instant `push_now` job, and the 2 s outbox sweep is the fallback. Dashboard polling (every 3 s) uses weak ETags, so unchanged data comes back as `304` with no body, and the rest is gzipped. That took the parent dashboard from about 68 MB/h to about 1.8 MB/h.
 - The worker writes `worker:heartbeat` to Redis every minute, but only after a successful database query. `/readyz` reports its age. Phase 4 adds the dead-man's switch that pages on a stale heartbeat.
 
-## Phase 1 gate (pre-hackathon plan)
+## Deploying (manual steps)
 
-This is the plan from before the hackathon, kept for reference. The demo now runs locally with the database in Docker, so the Tiger Cloud, Render and Vercel items below don't apply to it.
+Nothing has been provisioned yet. These steps need your accounts:
 
-- [x] Migrations run cleanly and round-trip locally (`test_migrations.py`)
-- [x] Query budgets pass locally (all well under 1 ms of execution time)
-- [x] API, worker, and frontend run end to end locally
-- [ ] Migrations run cleanly on the **Tiger Cloud staging** service
-- [ ] Measured query times meet Section 18.6 targets **on staging**:
-  ```bash
-  TEST_DATABASE_URL=<staging url> TEST_EXTERNAL_DB=1 DB_SSL_MODE=require uv run pytest -m budget
-  ```
-- [ ] Round-trip time recorded from Render in each candidate region: `uv run python scripts/rtt.py` from a Render shell
-- [ ] Hello-world deployments live on Vercel and Render staging
+1. **Tiger Cloud.** Create a staging service on TimescaleDB 2.30.2 / PG 17 in the AWS region you chose in Phase 0. Copy its connection string, or its pooler URL if you use the pooler.
+2. **Render.** Create a Blueprint from this repository (`render.yaml`). Choose the Render region that matches Tiger Cloud and edit `region:` if needed. Set the secrets:
+   - `DATABASE_URL` on the `sugarscout-shared` env group.
+   - `CORS_ORIGINS` on the API (the Vercel URL).
 
-Record staging measurements here:
-
-| Date | Region | RTT p50 / p95 | Rules query exec / wall | Month view exec / wall |
-| --- | --- | --- | --- | --- |
-| | | | | |
+   Migrations run as the API's pre-deploy command.
+3. **Vercel.** Import the repository with root directory `frontend`, and set `VITE_API_BASE_URL` to the Render API URL.
+4. **Check.** `GET https://<api>/readyz` should return `"status": "ok"` with a recent worker heartbeat.
