@@ -1,0 +1,71 @@
+# Render Blueprint: API, worker, and Redis (design doc Sections 4 and 13).
+# The database is NOT on Render: it is a Tiger Cloud service. Set DATABASE_URL as a
+# secret on the `sugarscout-shared` env group after creating that service.
+#
+# Paid, always-on plans throughout: a free-tier instance that sleeps would silently
+# stop safety monitoring (Section 4.3). Pick the Render region that matches the Tiger
+# Cloud AWS region chosen in Phase 0 (e.g. oregon <-> us-west-2, virginia <-> us-east-1).
+
+envVarGroups:
+  - name: sugarscout-shared
+    envVars:
+      - key: ENV
+        value: staging
+      - key: DB_SSL_MODE
+        value: require
+      - key: LOG_JSON
+        value: "true"
+      - key: DATABASE_URL
+        sync: false # secret: Tiger Cloud connection string (pooler URL if used)
+
+services:
+  - type: web
+    name: sugarscout-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /healthz
+    preDeployCommand: alembic upgrade head
+    dockerCommand: sh -c 'uvicorn sugarscout.api.main:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --forwarded-allow-ips="*"'
+    envVars:
+      - fromGroup: sugarscout-shared
+      - key: SERVICE_NAME
+        value: api
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: CORS_ORIGINS
+        sync: false # e.g. https://sugarscout.vercel.app
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: sugarscout-redis
+          property: connectionString
+
+  - type: worker
+    name: sugarscout-worker
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    dockerCommand: arq sugarscout.worker.main.WorkerSettings
+    envVars:
+      - fromGroup: sugarscout-shared
+      - key: SERVICE_NAME
+        value: worker
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: sugarscout-redis
+          property: connectionString
+
+  - type: keyvalue
+    name: sugarscout-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction # job queue and alert cooldowns must never be evicted
+    ipAllowList: [] # only reachable from Render services in this account

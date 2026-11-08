@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      # Keep this tag identical to docker-compose.yml and the Tiger Cloud service.
+      timescaledb:
+        image: timescale/timescaledb:2.30.2-pg17
+        env:
+          POSTGRES_USER: sugarscout
+          POSTGRES_PASSWORD: sugarscout
+          POSTGRES_DB: sugarscout
+          TIMESCALEDB_TELEMETRY: "off"
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sugarscout -d sugarscout"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7.4.6-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://sugarscout:sugarscout@localhost:55432/sugarscout_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+      # Shared runners are noisy; budgets here are smoke checks. The real gate is the
+      # Tiger Cloud staging run with BUDGET_MULTIPLIER=1 (see README).
+      BUDGET_MULTIPLIER: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

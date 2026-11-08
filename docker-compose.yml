@@ -1,0 +1,76 @@
+# Local development stack. Versions are pinned; TIMESCALEDB_VERSION must match the
+# Tiger Cloud service (design doc Section 19.5). See README "Pinned versions".
+name: sugarscout
+
+x-backend: &backend
+  build:
+    context: ./backend
+  env_file:
+    - path: .env
+      required: false
+  environment: &backend-env
+    ENV: local
+    DATABASE_URL: postgresql://sugarscout:sugarscout@timescaledb:5432/sugarscout
+    DB_SSL_MODE: disable
+    REDIS_URL: redis://redis:6379/0
+    LOG_JSON: "false"
+  depends_on:
+    timescaledb:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.30.2-pg17
+    environment:
+      POSTGRES_USER: sugarscout
+      POSTGRES_PASSWORD: sugarscout
+      POSTGRES_DB: sugarscout
+      TIMESCALEDB_TELEMETRY: "off"
+    ports:
+      # 55432 on the host avoids clashing with a locally installed Postgres on 5432.
+      - "${TSDB_HOST_PORT:-55432}:5432"
+    volumes:
+      - tsdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sugarscout -d sugarscout"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4.6-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    profiles: ["tools"]
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: api
+      CORS_ORIGINS: http://localhost:5173
+    command: ["uvicorn", "sugarscout.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+
+  worker:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: worker
+    command: ["arq", "sugarscout.worker.main.WorkerSettings"]
+
+volumes:
+  tsdata:

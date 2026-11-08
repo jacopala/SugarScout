@@ -1,0 +1,82 @@
+/*
+ * Shared design tokens (design doc Section 10.3). The child and parent views share
+ * these so they feel consistent, then diverge through the [data-view] scopes below.
+ * Child view: soft, calm, large type, no alarming colors (Section 10.1).
+ * Parent view: denser, neutral, status colors allowed for clarity.
+ */
+:root {
+  color-scheme: light dark;
+
+  --font-sans: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --surface-muted: #eeebe3;
+  --text: #1d2125;
+  --text-muted: #5d636a;
+  --border: #dcd7cc;
+  --accent: #2f7d6d;
+  --accent-contrast: #ffffff;
+  --focus: #1f5fbf;
+
+  --status-ok: #2f7d4f;
+  --status-warn: #a35f00;
+  --status-bad: #b3261e;
+  --status-unknown: #6b7076;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #16181d;
+    --surface: #1f2228;
+    --surface-muted: #282c33;
+    --text: #eceae4;
+    --text-muted: #a3a7ad;
+    --border: #353a42;
+    --accent: #6cc4b0;
+    --accent-contrast: #0e1a17;
+    --focus: #8ab4ff;
+    --status-ok: #6fcf97;
+    --status-warn: #f2b35b;
+    --status-bad: #ff8a80;
+    --status-unknown: #9aa0a6;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #16181d;
+  --surface: #1f2228;
+  --surface-muted: #282c33;
+  --text: #eceae4;
+  --text-muted: #a3a7ad;
+  --border: #353a42;
+  --accent: #6cc4b0;
+  --accent-contrast: #0e1a17;
+  --focus: #8ab4ff;
+  --status-ok: #6fcf97;
+  --status-warn: #f2b35b;
+  --status-bad: #ff8a80;
+  --status-unknown: #9aa0a6;
+}
+
+[data-view='child'] {
+  --view-font-size: 1.375rem;
+  --view-accent: #7a6cc4;
+}
+
+[data-view='parent'] {
+  --view-font-size: 1rem;
+  --view-accent: var(--accent);
+}
