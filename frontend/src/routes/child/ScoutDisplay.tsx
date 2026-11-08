@@ -70,7 +70,6 @@ export function ScoutDisplay() {
   useEffect(() => {
     if (q && spokenQuestion.current !== q.id && !meals) {
       spokenQuestion.current = q.id
-      setCaption({ you: null, scout: q.wording })
       void voice.say(q.wording, 'neutral')
     }
   }, [q, meals, voice])
@@ -143,7 +142,7 @@ export function ScoutDisplay() {
   const hint = send.isPending ? 'Thinking…' : voice.checking ? 'Hmm…' : HINT[voice.state]
 
   return (
-    <main className="scout-screen">
+    <main className={q ? 'scout-screen has-question' : 'scout-screen'}>
       <div className="scout-top">
         <div className="child-band-top">
           <span className="scout-name">

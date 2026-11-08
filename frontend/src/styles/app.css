@@ -1400,3 +1400,411 @@ input[type='password'] {
   font-size: 0.875rem;
   color: var(--text-muted);
 }
+
+/* =====================================================================================
+   Responsive layer: desktop, tablets, iOS and Android phones from 16:9 to 22:9.
+   Same tokens, fonts and shadows everywhere; layout changes per device class.
+   ===================================================================================== */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  /* The mic and hero face scale with BOTH width and height, so short 16:9 phones fit
+     without scrolling and tall 22:9 phones don't leave empty gaps. */
+  --mic: clamp(120px, min(46vw, 26svh), 220px);
+  --hero-face: clamp(104px, min(44vw, 21svh), 190px);
+}
+
+/* Safe areas: notches, Dynamic Island, home indicators, Android gesture bars. */
+.child-band,
+.scout-top {
+  padding-top: calc(var(--space-6) + var(--safe-top));
+  padding-left: calc(var(--space-6) + var(--safe-left));
+  padding-right: calc(var(--space-6) + var(--safe-right));
+}
+.scout-sheet,
+.mood-body {
+  padding-bottom: calc(var(--space-6) + var(--safe-bottom));
+}
+.sheet {
+  padding-bottom: calc(var(--space-6) + var(--safe-bottom));
+}
+.parent-band {
+  padding-top: calc(var(--space-6) + var(--safe-top));
+}
+
+/* Height-aware mic and hero face. */
+.mic-btn {
+  width: var(--mic);
+  height: var(--mic);
+}
+.mic-btn svg {
+  width: calc(var(--mic) * 0.4);
+  height: calc(var(--mic) * 0.4);
+}
+.mic-halo {
+  width: calc(var(--mic) * 1.36);
+  height: calc(var(--mic) * 1.36);
+}
+.mic-zone {
+  min-height: 0;
+}
+.scout-screen.has-question {
+  --mic: clamp(96px, min(34vw, 17svh), 170px);
+}
+.mood-hero-face {
+  width: var(--hero-face);
+  height: var(--hero-face);
+}
+.mood-hero-face svg {
+  width: calc(var(--hero-face) * 0.8);
+  height: calc(var(--hero-face) * 0.8);
+}
+
+/* Short phones (16:9 and smaller, e.g. iPhone SE 375×667, Android 360×640). */
+@media (max-height: 700px) {
+  .child-band {
+    padding-bottom: var(--space-6);
+    gap: var(--space-1);
+  }
+  .child-question {
+    font-size: clamp(1.5rem, 6.4vw, 1.875rem);
+  }
+  .mood-body {
+    gap: var(--space-4);
+    padding-top: var(--space-4);
+  }
+  .mood-hero-label {
+    font-size: 1.375rem;
+  }
+  .scout-top {
+    padding-bottom: var(--space-4);
+    gap: var(--space-2);
+  }
+  .bubble-scout {
+    font-size: 1.0625rem;
+    padding: var(--space-3) var(--space-4);
+  }
+  .scout-sheet {
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+  }
+  .question-card {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+  .question-text {
+    font-size: 1.125rem;
+  }
+  .question-option {
+    min-height: 46px;
+  }
+  .pill {
+    min-height: 48px;
+  }
+}
+
+/* Tall phones (21–22:9, e.g. 360×880, 384×936): spread content instead of leaving a gap. */
+@media (max-width: 599px) and (min-aspect-ratio: 9/22) and (max-aspect-ratio: 9/20) {
+  .mood-body {
+    justify-content: space-evenly;
+  }
+  .mood-bar {
+    margin-top: var(--space-6);
+  }
+}
+
+/* Very narrow Android phones (360 px): keep the mood bar inside the screen. */
+@media (max-width: 380px) {
+  .mood-bar {
+    padding: 0 4px;
+  }
+  .mood-bar-item {
+    width: 50px;
+    height: 50px;
+  }
+  .mood-bar-item svg {
+    width: 38px;
+    height: 38px;
+  }
+  .mood-bar-item[aria-pressed='true'] {
+    width: 84px;
+    height: 84px;
+    margin: 0 -10px;
+  }
+  .mood-bar-item[aria-pressed='true'] svg {
+    width: 52px;
+    height: 52px;
+  }
+  .scout-pills .pill {
+    font-size: 0.875rem;
+    gap: 6px;
+  }
+}
+
+/* ---- Sheets & dialogs: centred cards on tablets and desktop --------------------------- */
+@media (min-width: 700px) {
+  .overlay[data-kind='sheet'] {
+    align-items: center;
+    padding: var(--space-6);
+  }
+  .sheet {
+    width: min(640px, 100%);
+    border-radius: 32px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  }
+  .sheet-handle {
+    display: none;
+  }
+  .food-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+/* ---- Child screens: two panels on landscape phones, tablets in landscape, desktop ---- */
+@media (min-width: 900px), (orientation: landscape) and (max-height: 520px) {
+  .scout-screen {
+    max-width: 1200px;
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: minmax(300px, 5fr) minmax(0, 7fr);
+    gap: var(--space-6);
+    padding: calc(var(--space-6) + var(--safe-top)) calc(var(--space-6) + var(--safe-right))
+      calc(var(--space-6) + var(--safe-bottom)) calc(var(--space-6) + var(--safe-left));
+    background: var(--bg);
+    align-items: stretch;
+  }
+  .scout-top {
+    background: var(--indigo);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-3);
+    justify-content: flex-start;
+  }
+  .scout-sheet {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-2);
+    padding: var(--space-6);
+  }
+  .scout-screen {
+    --mic: clamp(140px, min(22vw, 34svh), 260px);
+  }
+  .scout-screen.has-question {
+    --mic: clamp(110px, min(16vw, 22svh), 200px);
+  }
+
+  .mood-page {
+    max-width: 1100px;
+    min-height: auto;
+    margin: max(var(--space-6), calc((100dvh - 640px) / 2)) auto var(--space-6);
+    display: grid;
+    grid-template-columns: minmax(300px, 5fr) minmax(0, 7fr);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-3);
+  }
+  .mood-page .child-band {
+    border-radius: 0;
+    justify-content: center;
+    padding: var(--space-8);
+  }
+  .mood-page .child-band-top {
+    position: absolute;
+    top: calc(var(--space-6) + var(--safe-top));
+    left: var(--space-8);
+    right: var(--space-8);
+  }
+  .mood-page {
+    position: relative;
+  }
+  .mood-page .child-question {
+    font-size: clamp(2rem, 3.4vw, 2.75rem);
+  }
+  .mood-body {
+    justify-content: center;
+    padding: var(--space-8);
+  }
+}
+
+/* Landscape phones: tighter, so both panels fit in ~360–430 px of height. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .scout-screen {
+    gap: var(--space-3);
+    padding-top: calc(var(--space-3) + var(--safe-top));
+    padding-bottom: calc(var(--space-3) + var(--safe-bottom));
+    --mic: clamp(84px, 30svh, 140px);
+  }
+  .scout-screen.has-question {
+    --mic: clamp(72px, 22svh, 110px);
+  }
+  .scout-top,
+  .scout-sheet {
+    padding: var(--space-4);
+    gap: var(--space-2);
+  }
+  .mic-hint {
+    font-size: 1rem;
+  }
+  .mic-sub {
+    display: none;
+  }
+  .bubble-scout {
+    font-size: 1rem;
+  }
+  .mood-page {
+    margin: var(--space-3) auto;
+    grid-template-columns: minmax(240px, 4fr) minmax(0, 7fr);
+  }
+  .mood-page .child-band {
+    padding: var(--space-4);
+  }
+  .mood-page .child-band-top {
+    position: static;
+  }
+  .mood-body {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+  .mood-page {
+    --hero-face: clamp(72px, 24svh, 120px);
+  }
+}
+
+/* ---- Parent dashboard ------------------------------------------------------------------ */
+.section-chips {
+  display: none;
+}
+@media (max-width: 719px) {
+  .section-chips {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    margin: 0 calc(-1 * var(--space-4)) var(--space-4);
+    padding: var(--space-2) var(--space-4);
+    padding-top: calc(var(--space-2) + var(--safe-top));
+    background: rgba(244, 243, 251, 0.92);
+    backdrop-filter: blur(10px);
+    scrollbar-width: none;
+  }
+  .section-chips a {
+    flex: none;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow-1);
+    color: var(--indigo);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .parent-band {
+    padding-bottom: 88px;
+  }
+  .parent-band .api-status {
+    display: none;
+  }
+  .card {
+    padding: var(--space-4);
+  }
+  .meal-totals {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .meal-total strong {
+    font-size: 1.375rem;
+  }
+}
+@media (min-width: 720px) {
+  .dash-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  }
+}
+@media (min-width: 1600px) {
+  .parent-band-inner,
+  .parent-body {
+    max-width: 1680px;
+  }
+  .dash-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 820px);
+  }
+  .dash-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+/* Anchored sections shouldn't hide under the sticky chips. */
+[id$='-h'] {
+  scroll-margin-top: 72px;
+}
+.child-reminder svg,
+.ai-note svg,
+.question-eyebrow svg {
+  flex: none;
+}
+@media (min-width: 900px), (orientation: landscape) and (max-height: 520px) {
+  .mood-page .child-band {
+    position: relative;
+  }
+  .mood-page .child-band-top {
+    left: var(--space-8);
+    right: var(--space-8);
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .mood-page .mood-hero-face,
+  .mood-bar-ends {
+    display: none;
+  }
+  .mood-page .mood-hero-label {
+    font-size: 1.25rem;
+  }
+  .mood-page .btn-block {
+    min-height: 48px;
+  }
+}
+@media (max-width: 719px) {
+  .parent-band {
+    padding-bottom: var(--space-6);
+  }
+  .parent-body {
+    margin-top: 0;
+  }
+  .section-chips {
+    margin-top: 0;
+  }
+}
+/* While Scout is asking something on a phone, the question card IS the conversation. */
+@media (max-width: 899px) and (not ((orientation: landscape) and (max-height: 520px))) {
+  .scout-screen.has-question .bubble-you,
+  .scout-screen.has-question .bubble-scout,
+  .scout-screen.has-question .mic-sub {
+    display: none;
+  }
+  .scout-screen.has-question .scout-top {
+    padding-bottom: var(--space-4);
+  }
+}
+@media (max-height: 700px) {
+  .scout-screen.has-question {
+    --mic: clamp(84px, 14svh, 120px);
+  }
+  .scout-screen.has-question .child-reminder p {
+    font-size: 0.875rem;
+  }
+}
+@media (max-width: 599px) and (min-aspect-ratio: 9/23) and (max-aspect-ratio: 9/20) {
+  .mood-actions {
+    margin-top: 0;
+  }
+  .mood-page {
+    --hero-face: clamp(150px, 24svh, 210px);
+  }
+}

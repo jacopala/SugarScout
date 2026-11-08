@@ -40,6 +40,15 @@ export function ParentHome() {
         </div>
       </header>
       <div className="parent-body">
+        <nav className="section-chips" aria-label="Jump to section">
+          <a href="#live-h">Now</a>
+          <a href="#alerts-h">Alerts</a>
+          <a href="#agent-h">Scout agent</a>
+          <a href="#meals-h">Meals</a>
+          <a href="#insulin-h">Insulin</a>
+          <a href="#mood-h">Moods</a>
+          <a href="#summary-h">Summary</a>
+        </nav>
         <div className="dash-grid">
           <div className="dash-main">
             <GlucoseHero />

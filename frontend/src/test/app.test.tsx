@@ -328,8 +328,10 @@ describe('Scout agent', () => {
       },
       'POST /api/voice/speak': { body: { audio: null } },
     })
-    renderAt('/child/scout')
+    const { container } = renderAt('/child/scout')
     expect(await screen.findByRole('heading', { name: 'Did you have your insulin with your snack?' })).toBeInTheDocument()
+    // The layout switches to its compact "question showing" mode (smaller mic on short phones).
+    expect(container.querySelector('.scout-screen.has-question')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Not yet' }))
     expect(await screen.findByText("Okay, thanks for telling me. Let's check your plan with a grown-up.")).toBeInTheDocument()
     const post = fetchSpy.mock.calls.find(([url, init]) => String(url) === '/api/agent/answer' && init?.method === 'POST')
