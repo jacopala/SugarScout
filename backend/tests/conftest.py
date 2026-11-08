@@ -104,6 +104,16 @@ def settings() -> Iterator[Settings]:
     os.environ["REDIS_URL"] = TEST_REDIS_URL
     os.environ.setdefault("ENV", "test")
     os.environ.setdefault("LOG_JSON", "false")
+    # Never let real secrets from backend/.env reach tests: no real texts, no model spend.
+    for key in (
+        "TWILIO_ACCOUNT_SID",
+        "TWILIO_AUTH_TOKEN",
+        "TWILIO_FROM",
+        "PARENT_PHONE",
+        "NVIDIA_API_KEY",
+        "DEMO_ACCESS_CODE",
+    ):
+        os.environ[key] = ""
     get_settings.cache_clear()
     yield get_settings()
     get_settings.cache_clear()

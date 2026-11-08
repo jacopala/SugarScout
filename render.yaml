@@ -1,10 +1,13 @@
-# Render Blueprint: API, worker, and Redis (design doc Sections 4 and 13).
-# The database is NOT on Render: it is a Tiger Cloud service. Set DATABASE_URL as a
-# secret on the `sugarscout-shared` env group after creating that service.
+# Render Blueprint: API, worker, and Redis.
+# The database is NOT on Render: it is a Tiger Cloud service.
 #
-# Paid, always-on plans throughout: a free-tier instance that sleeps would silently
-# stop safety monitoring (Section 4.3). Pick the Render region that matches the Tiger
-# Cloud AWS region chosen in Phase 0 (e.g. oregon <-> us-west-2, virginia <-> us-east-1).
+# Secrets are `sync: false`: Render asks for them when you create the Blueprint.
+#   API:    DATABASE_URL, DEMO_ACCESS_CODE, CORS_ORIGINS, NVIDIA_API_KEY
+#   Worker: DATABASE_URL, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM, PARENT_PHONE
+#
+# The worker runs the fake CGM and the rules, so it must be a paid always-on
+# instance (free instances don't run background workers). Pick the Render region
+# closest to the Tiger Cloud service (oregon <-> us-west-2, virginia <-> us-east-1).
 
 envVarGroups:
   - name: sugarscout-shared
@@ -15,8 +18,12 @@ envVarGroups:
         value: require
       - key: LOG_JSON
         value: "true"
-      - key: DATABASE_URL
-        sync: false # secret: Tiger Cloud connection string (pooler URL if used)
+      - key: DEMO_CHILD_NAME
+        value: Alex
+      - key: NEMOTRON_CHAT_MODEL
+        value: nvidia/nemotron-nano-3-30b-a3b
+      - key: NEMOTRON_ANALYSIS_MODEL
+        value: nvidia/nemotron-3-super-120b-a12b
 
 services:
   - type: web
@@ -35,8 +42,14 @@ services:
         value: api
       - key: DB_POOL_SIZE
         value: "5"
+      - key: DATABASE_URL
+        sync: false
+      - key: DEMO_ACCESS_CODE
+        sync: false
       - key: CORS_ORIGINS
-        sync: false # e.g. https://sugarscout.vercel.app
+        sync: false # your Vercel URL, e.g. https://sugarscout.vercel.app
+      - key: NVIDIA_API_KEY
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -57,6 +70,16 @@ services:
         value: worker
       - key: DB_POOL_SIZE
         value: "3"
+      - key: DATABASE_URL
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false # your Twilio trial number, +1XXXXXXXXXX
+      - key: PARENT_PHONE
+        sync: false # your verified phone, +1XXXXXXXXXX
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -65,7 +88,7 @@ services:
 
   - type: keyvalue
     name: sugarscout-redis
-    plan: starter
+    plan: free # fine for a demo: sim state and job queue can be lost on restart
     region: oregon
-    maxmemoryPolicy: noeviction # job queue and alert cooldowns must never be evicted
+    maxmemoryPolicy: noeviction
     ipAllowList: [] # only reachable from Render services in this account

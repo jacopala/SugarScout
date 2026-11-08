@@ -99,8 +99,6 @@ class Settings(BaseSettings):
     def _require_tls_outside_local(self) -> Settings:
         if self.env in (Env.STAGING, Env.PRODUCTION) and self.db_ssl_mode is not DbSslMode.REQUIRE:
             raise ValueError("DB_SSL_MODE must be 'require' in staging and production")
-        if self.env in (Env.STAGING, Env.PRODUCTION) and not self.demo_access_code:
-            raise ValueError("DEMO_ACCESS_CODE must be set outside local/test")
         return self
 
     @property

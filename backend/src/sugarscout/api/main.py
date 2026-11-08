@@ -16,13 +16,16 @@ from sugarscout.ai.gateway import get_gateway
 from sugarscout.api.routes import alerts, chat, demo, glucose, health, summary
 from sugarscout.db import create_engine, create_sessionmaker
 from sugarscout.log import configure_logging, get_logger
-from sugarscout.settings import Settings, get_settings
+from sugarscout.settings import Env, Settings, get_settings
 
 log = get_logger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    if settings.env in (Env.STAGING, Env.PRODUCTION) and not settings.demo_access_code:
+        # A public demo without the code would let anyone text the parent's phone.
+        raise RuntimeError("DEMO_ACCESS_CODE must be set outside local/test")
     configure_logging(settings)
 
     @asynccontextmanager

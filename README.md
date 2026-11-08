@@ -2,7 +2,51 @@
 
 A web app that supports a child with type 1 diabetes. A friendly companion checks in with the child, takes snack logs and live CGM readings, reminds them about care-plan tasks, and escalates to a parent when something needs attention. Parents get a separate dashboard.
 
-The full design is in *Pediatric Health Companion: Design Document and Implementation Plan* (v0.2). This repository is at **Phase 1: Skeleton and data layer**.
+The full design is in *Pediatric Health Companion: Design Document and Implementation Plan* (v0.2). This repository is a **hackathon build**: CGM data is simulated, there's one demo child, and a shared access code stands in for sign-in.
+
+## Hackathon demo
+
+### What's real and what's simulated
+
+| Piece | Status |
+| --- | --- |
+| Glucose data | **Fake CGM** in the worker: one reading every 5 s with real timestamps, sped-up dynamics, and presenter-controlled scenarios |
+| Rules and alerts | Real: deterministic rules on raw readings, dedupe, auto-resolve, an audit trail ("Why did this fire?") |
+| SMS | Real via a Twilio trial account (it only texts verified numbers). Without keys it runs as a dry run, logged and never sent |
+| Companion chat | Real: Nemotron Nano via the NVIDIA API catalog, with a deterministic emergency bypass and an output filter |
+| Parent summary | Real: Nemotron Super words stats that were computed in code. The output is validated and rejected if unsafe |
+| Sign-in | Replaced by one `DEMO_ACCESS_CODE` |
+
+### Demo script (about 4 minutes)
+
+Open `/parent` on the laptop and `/child` on a phone or second window.
+
+1. **Steady.** Point out the live line, the 7-day chart, and that there are no alerts.
+2. **Chat.** On the child view, tap "I feel fine" and "Tell me a joke". Scout answers briefly and kindly.
+3. **Rapid drop.** Click **Rapid drop** under Demo controls. Within about 30 s, an **urgent low** alert opens and your phone gets a text. The child view shows a calm reminder from the care plan, with no numbers.
+4. **Acknowledge, then Recover.** The alerts auto-resolve and an all-clear text arrives. Open "Why did this fire?" to show the exact readings and thresholds behind the alert.
+5. **Sensor dropout.** About 30 s later a **data gap** alert fires. Silence is never treated as "fine". Then click **Recover**.
+6. **Emergency language.** On the child view, type "I feel really dizzy and shaky". The model is bypassed: a scripted reply appears, an urgent alert opens, and the parent gets a text.
+7. **Weekly summary.** Click **Generate summary**. Nemotron Super writes it from stats computed in code. Each claim links to the number it's based on, and the card is labelled AI-generated.
+
+Pitch line: *the AI talks; fixed rules decide.*
+
+### Deploying the demo
+
+1. **Tiger Cloud.** Create a service and copy its connection string. Migration 0001 targets TimescaleDB 2.30; check that the service version is 2.18 or later (for the columnstore API).
+2. **GitHub.** Push this repository.
+3. **Render.** Choose New → Blueprint, pick the repository, and fill in the secrets it asks for:
+   - API: `DATABASE_URL`, `DEMO_ACCESS_CODE`, `CORS_ORIGINS` (the Vercel URL, which you can fill in after step 4), `NVIDIA_API_KEY`
+   - Worker: `DATABASE_URL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`, `PARENT_PHONE`
+
+   Migrations run automatically before each API deploy.
+4. **Vercel.** Import the repository with root directory `frontend`. Set `VITE_API_BASE_URL` to the Render API URL.
+5. **Check.**
+   - `https://<api>/readyz` returns `"status": "ok"` with a recent worker heartbeat.
+   - The dashboard's Demo controls show **SMS: live · AI: on**.
+   - Run the demo script once end to end.
+
+For local secrets, copy `.env.example` to `backend/.env` and fill in the Twilio and NVIDIA keys. Docker Compose loads that file into the containers, and the tests ignore it.
 
 ## Core safety principles
 
@@ -111,7 +155,7 @@ Nothing has been provisioned yet. These steps need your accounts:
 3. **Vercel.** Import the repository with root directory `frontend`, and set `VITE_API_BASE_URL` to the Render API URL.
 4. **Check.** `GET https://<api>/readyz` should return `"status": "ok"` with a recent worker heartbeat.
 
-## Phase 1 gate
+## Phase 1 gate (pre-hackathon plan)
 
 - [x] Migrations run cleanly and round-trip locally (`test_migrations.py`)
 - [x] Query budgets pass locally (all well under 1 ms of execution time)
