@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sugarscout.agent.agent import run_agent
 from sugarscout.agent.answers import AnswerError, answer_question, pending_question
 from sugarscout.agent.questions import BANK
-from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, enqueue
+from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, deliver_now, enqueue
 from sugarscout.demo import DEMO_CHILD_ID
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -78,8 +78,7 @@ async def post_answer(
         )
     except AnswerError as exc:
         raise HTTPException(409, str(exc)) from exc
-    for nid in result.sms_ids:
-        await enqueue(request, "send_sms", nid)
+    await deliver_now(request, result.sms_ids)
     await enqueue(request, "agent_tick")
     return AnswerOut(reply=result.reply, emotion=result.emotion, open_meals=result.open_meals)
 
@@ -92,8 +91,7 @@ async def run_now(
     d, sms = await run_agent(
         engine, redis, settings, request.app.state.llm, DEMO_CHILD_ID, datetime.now(UTC)
     )
-    for nid in sms:
-        await enqueue(request, "send_sms", nid)
+    await deliver_now(request, sms)
     return {"status": d.status, "ask": d.ask, "heads_up": d.heads_up, "overrides": d.overrides}
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from collections.abc import Iterable
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -59,3 +60,14 @@ async def enqueue(request: Request, job: str, *args: object) -> None:
     if state.arq is None:
         state.arq = await create_pool(RedisSettings.from_dsn(str(state.settings.redis_url)))
     await state.arq.enqueue_job(job, *args)
+
+
+async def deliver_now(request: Request, sms_ids: Iterable[int] = ()) -> None:
+    """Send what an alert just queued: each SMS, then the browser pushes right away.
+
+    The worker's push outbox timer is only the retry path, so a push no longer waits
+    for its next pass.
+    """
+    for nid in sms_ids:
+        await enqueue(request, "send_sms", nid)
+    await enqueue(request, "push_now")

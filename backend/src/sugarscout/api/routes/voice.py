@@ -17,7 +17,7 @@ from sugarscout.agent.questions import match_answer
 from sugarscout.ai.chat import handle_message
 from sugarscout.ai.speech import Emotion, speak, wav_to_pcm16k
 from sugarscout.ai.wake import parse_wake
-from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, enqueue
+from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, deliver_now, enqueue
 from sugarscout.demo import DEMO_CHILD_ID
 from sugarscout.log import get_logger
 
@@ -87,8 +87,7 @@ async def turn(
             answered = await answer_question(
                 engine, redis, settings, DEMO_CHILD_ID, pending["id"], value
             )
-            for nid in answered.sms_ids:
-                await enqueue(request, "send_sms", nid)
+            await deliver_now(request, answered.sms_ids)
             await enqueue(request, "agent_tick")
             audio = await speak(speech, redis, settings, answered.reply, answered.emotion)
             return VoiceTurnOut(
@@ -130,8 +129,7 @@ async def turn(
         settings.demo_child_name,
         message,
     )
-    for nid in result.sms_ids:
-        await enqueue(request, "send_sms", nid)
+    await deliver_now(request, result.sms_ids)
     audio = await speak(speech, redis, settings, result.reply, result.emotion)
     return VoiceTurnOut(
         emotion=result.emotion,

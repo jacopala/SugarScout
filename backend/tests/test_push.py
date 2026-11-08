@@ -103,3 +103,44 @@ async def test_push_without_devices_or_keys_is_not_an_error(
             )
         ).one()
     assert tuple(status) == ("skipped", "no devices subscribed")
+
+
+async def test_help_sends_push_immediately(
+    api: tuple[AsyncClient, Settings], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Raising an alert enqueues `push_now`, so the push does not wait for the outbox timer."""
+    c, _ = api
+    jobs: list[tuple[str, tuple[object, ...]]] = []
+
+    async def fake_enqueue(request: object, job: str, *args: object) -> None:
+        jobs.append((job, args))
+
+    monkeypatch.setattr("sugarscout.api.deps.enqueue", fake_enqueue)
+    assert (await c.post("/help")).status_code == 200
+    assert ("push_now", ()) in jobs
+
+
+async def test_concurrent_delivery_sends_each_push_once(
+    api: tuple[AsyncClient, Settings], engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`push_now` and the outbox timer can overlap; SKIP LOCKED keeps it to one send."""
+    import asyncio
+    import time
+
+    c, keyed = api
+    await c.post("/push/subscribe", json=SUB)
+    sent: list[str] = []
+
+    def slow_send(settings: Settings, sub: dict[str, Any], data: str, urgent: bool) -> int:
+        time.sleep(0.2)  # hold the row lock while the other runner looks
+        sent.append(json.loads(data)["tag"])
+        return 201
+
+    monkeypatch.setattr(push_mod, "_send_one", slow_send)
+    await c.post("/help")
+    counts = await asyncio.gather(
+        push_mod.deliver_pending(engine, keyed, "Alex"),
+        push_mod.deliver_pending(engine, keyed, "Alex"),
+    )
+    assert sorted(counts) == [0, 1]
+    assert len(sent) == 1

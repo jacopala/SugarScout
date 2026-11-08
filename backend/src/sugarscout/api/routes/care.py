@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from sugarscout.ai.meals import CHILD_MEAL_REPLY, recent_meals, record_meal
 from sugarscout.alerts.service import raise_alert
-from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, enqueue
+from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, deliver_now, enqueue
 from sugarscout.demo import CHILD_REMINDERS, DEMO_CHILD_ID
 from sugarscout.rules.engine import URGENT, RuleHit
 
@@ -37,8 +37,7 @@ async def help_request(
     )
     async with engine.begin() as conn:
         alert_id, sms_ids = await raise_alert(conn, redis, settings, DEMO_CHILD_ID, name, hit)
-    for nid in sms_ids:
-        await enqueue(request, "send_sms", nid)
+    await deliver_now(request, sms_ids)
     return HelpOut(sent=True, already_open=alert_id is None, reply=CHILD_REMINDERS["help_request"])
 
 

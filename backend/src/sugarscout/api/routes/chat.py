@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from sugarscout.ai.chat import handle_message
-from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, enqueue
+from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, deliver_now
 from sugarscout.demo import DEMO_CHILD_ID
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -64,8 +64,7 @@ async def chat(
         settings.demo_child_name,
         body.message,
     )
-    for nid in result.sms_ids:
-        await enqueue(request, "send_sms", nid)
+    await deliver_now(request, result.sms_ids)
     return ChatOut(
         reply=result.reply,
         flagged=result.flagged,

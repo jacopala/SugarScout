@@ -5,6 +5,8 @@ Jobs:
 - `cgm_tick` (every SIM_TICK_SECONDS): fake CGM reading, rules on raw data, alert sync.
   Rules run even during a sensor dropout, which is how data gaps get caught.
 - `send_sms` (enqueued): Twilio delivery, off the tick's critical path.
+- `push_now` (enqueued right after an alert is written): browser push delivery.
+- `push_outbox` (every 2 s): retries any push still queued.
 
 Run with: arq sugarscout.worker.main.WorkerSettings
 """
@@ -15,7 +17,7 @@ import random
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 from sqlalchemy import text
 
@@ -75,6 +77,8 @@ async def cgm_tick(ctx: dict[str, Any]) -> int | None:
     )
     for nid in sms_ids:
         await ctx["redis"].enqueue_job("send_sms", nid)
+    if events:
+        await ctx["redis"].enqueue_job("push_now")
     for ev in events:
         log.info("alert." + ev.kind, alert_id=ev.alert_id, rule=ev.rule_type)
     return value
@@ -92,11 +96,16 @@ async def agent_tick(ctx: dict[str, Any]) -> str:
     )
     for nid in sms_ids:
         await ctx["redis"].enqueue_job("send_sms", nid)
+    if d.heads_up:
+        await ctx["redis"].enqueue_job("push_now")
     return d.status
 
 
 async def push_outbox(ctx: dict[str, Any]) -> int:
-    """Deliver queued browser pushes (every alert open/resolve queues one)."""
+    """Deliver queued browser pushes (every alert open/resolve queues one).
+
+    Also registered as `push_now`, which alert writers enqueue so a push goes out
+    immediately; this timer is the retry path."""
     s = ctx["settings"]
     return await deliver_pending_push(ctx["engine"], s, s.demo_child_name)
 
@@ -125,7 +134,12 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(str(get_settings().redis_url))
     on_startup = startup
     on_shutdown = shutdown
-    functions: ClassVar[list[Any]] = [send_sms, analyze_meal, agent_tick]
+    functions: ClassVar[list[Any]] = [
+        send_sms,
+        analyze_meal,
+        agent_tick,
+        func(push_outbox, name="push_now", timeout=20, keep_result=0),
+    ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, second=0, run_at_startup=True, timeout=30, unique=True),  # every minute
         cron(cgm_tick, second=_TICK_SECONDS, timeout=10, unique=True, keep_result=0),

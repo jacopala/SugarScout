@@ -10,10 +10,13 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from redis.asyncio import Redis
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from sugarscout.ai.gateway import get_gateway
 from sugarscout.ai.speech import get_speech
+from sugarscout.api.http_cache import etag_middleware
 from sugarscout.api.routes import (
     agent,
     alerts,
@@ -67,6 +70,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="SugarScout API", version="0.1.0", lifespan=lifespan)
 
+    # Innermost: ETag/304 for polled JSON. It sits inside CORS so a 304 still carries
+    # the CORS headers a cross-origin dashboard needs.
+    app.add_middleware(BaseHTTPMiddleware, dispatch=etag_middleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -74,6 +80,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Polled JSON (the alerts list especially) compresses about 8x.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     @app.middleware("http")
     async def request_context(
