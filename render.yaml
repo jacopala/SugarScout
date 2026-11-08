@@ -81,7 +81,7 @@ services:
       - key: PARENT_PHONE
         sync: false # your verified phone, +1XXXXXXXXXX
       - key: TWILIO_TRIAL_TEMPLATE
-        value: sms_account_alerts # trial accounts can't send custom text; clear after upgrading
+        value: sms_internal_alerts # trial accounts can't send custom text; clear after upgrading
       - key: REDIS_URL
         fromService:
           type: keyvalue
