@@ -158,7 +158,7 @@ export function WeekChart({ points }: { points: HourPoint[] }) {
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <p className="chart-caption">Line: hourly average. Shaded: hourly min to max. Green band: target range 70–180.</p>
+      <p className="chart-caption">Line: hourly average. Shaded: hourly min to max. Lavender band: target range 70–180.</p>
     </div>
   )
 }

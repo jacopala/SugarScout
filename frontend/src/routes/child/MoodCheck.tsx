@@ -1,52 +1,87 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
+import { HelpButton } from '../../components/HelpButton'
 import { MoodFace } from '../../components/MoodFace'
-import { MOODS } from '../../lib/mood'
+import { MOODS, moodInfo } from '../../lib/mood'
 import { useChildStatus, useCreateCheckin } from '../../lib/queries'
 
-/** The child's landing page: "How are you feeling today?" on a 1-5 scale. */
+const dayPart = () => {
+  const h = new Date().getHours()
+  const day = new Date().toLocaleDateString(undefined, { weekday: 'long' })
+  return `${day} ${h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'}`
+}
+
+/** The child's landing page: pick a face on the mood bar, then "That's me". */
 export function MoodCheck() {
   const status = useChildStatus()
   const create = useCreateCheckin()
   const navigate = useNavigate()
+  const [mood, setMood] = useState<number | null>(null)
   const name = status.data?.first_name
 
-  function pick(mood: number) {
-    if (create.isPending) return
+  function confirm() {
+    if (mood === null || create.isPending) return
     create.mutate(mood, {
       onSuccess: (data) => navigate('/child/scout', { state: { greeting: data.reply, emotion: data.emotion } }),
     })
   }
 
   return (
-    <main className="mood-stage">
-      <h1 className="mood-question">
-        {name ? `Hi ${name}! ` : ''}How are you feeling today?
-      </h1>
-      <div className="mood-scale" role="group" aria-label="How are you feeling, from 1 sad to 5 happy">
-        {MOODS.map((m) => (
-          <button
-            key={m.value}
-            className="mood-btn"
-            data-mood={m.value}
-            onClick={() => pick(m.value)}
-            disabled={create.isPending}
-            aria-label={`${m.value} out of 5: ${m.label}`}
-          >
-            <span className="mood-face" aria-hidden="true">
-              <MoodFace mood={m.value} size={88} />
-            </span>
-            <span className="mood-num" aria-hidden="true">
-              {m.value}
-            </span>
-            <span className="mood-label">{m.label}</span>
+    <main className="mood-page">
+      <header className="child-band">
+        <div className="child-band-top">
+          <span className="child-chip">{dayPart()}</span>
+          <HelpButton
+            onSent={(reply) => navigate('/child/scout', { state: { greeting: reply, emotion: 'calm' } })}
+          />
+        </div>
+        <p className="child-hello">{name ? `Hi ${name}!` : 'Hi!'}</p>
+        <h1 className="child-question">How are you feeling today?</h1>
+      </header>
+
+      <div className="mood-body">
+        <div className="mood-hero" aria-live="polite">
+          <span className="mood-hero-face">
+            {mood === null ? (
+              <span style={{ opacity: 0.35, lineHeight: 0 }}>
+                <MoodFace mood={3} size={138} />
+              </span>
+            ) : (
+              <MoodFace mood={mood} size={138} />
+            )}
+          </span>
+          <span className="mood-hero-label">{mood === null ? 'Tap a face' : moodInfo(mood).label}</span>
+        </div>
+
+        <div className="mood-bar" role="group" aria-label="How are you feeling, from 1 sad to 5 happy">
+          {MOODS.map((m) => (
+            <button
+              key={m.value}
+              className="mood-bar-item"
+              aria-pressed={mood === m.value}
+              aria-label={`${m.value} out of 5: ${m.label}`}
+              onClick={() => setMood(m.value)}
+            >
+              <MoodFace mood={m.value} size={44} />
+            </button>
+          ))}
+        </div>
+        <div className="mood-bar-ends" aria-hidden="true">
+          <span>Sad</span>
+          <span>Happy</span>
+        </div>
+
+        {create.isError ? <p className="form-error">Oops, that didn’t save. Try again?</p> : null}
+        <div className="mood-actions">
+          <button className="btn btn-primary btn-block" onClick={confirm} disabled={mood === null || create.isPending}>
+            {create.isPending ? 'Saving…' : 'That’s me'}
           </button>
-        ))}
+          <Link className="mood-skip" to="/child/scout">
+            Skip for now
+          </Link>
+        </div>
       </div>
-      {create.isError ? <p className="form-error">Oops, that didn’t save. Try again?</p> : null}
-      <Link className="mood-skip" to="/child/scout">
-        Skip for now
-      </Link>
     </main>
   )
 }

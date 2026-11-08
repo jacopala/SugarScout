@@ -4,6 +4,7 @@ import { AccessGate } from '../../components/AccessGate'
 import { ApiStatus } from '../../components/ApiStatus'
 import { AlertsPanel, DemoControls, GlucoseHero } from '../../components/Dashboard'
 import { LiveChart, WeekChart } from '../../components/GlucoseCharts'
+import { MealsCard } from '../../components/MealsCard'
 import { MoodCard } from '../../components/MoodCard'
 import { SummaryCard } from '../../components/SummaryCard'
 import { useDemoState, useLive, useWeek } from '../../lib/queries'
@@ -16,17 +17,22 @@ export function ParentHome() {
 
   return (
     <AccessGate>
-      <div className="shell shell-wide">
-        <header className="shell-header">
-          <Link className="brand" to="/">
-            <img src="/favicon.svg" alt="" />
-            SugarScout
-          </Link>
-          <ApiStatus />
-        </header>
-        <p className="eyebrow">Parent dashboard</p>
-        <h1>{name}</h1>
-
+      <header className="parent-band">
+        <div className="parent-band-inner">
+          <div className="shell-header">
+            <Link className="brand" to="/">
+              <img src="/favicon.svg" alt="" />
+              SugarScout
+            </Link>
+            <ApiStatus />
+          </div>
+          <div>
+            <p className="eyebrow">Parent dashboard</p>
+            <h1>{name}</h1>
+          </div>
+        </div>
+      </header>
+      <div className="parent-body">
         <div className="dash-grid">
           <div className="dash-main">
             <GlucoseHero />
@@ -51,6 +57,7 @@ export function ParentHome() {
           <aside className="dash-side">
             <DemoControls />
             <AlertsPanel />
+            <MealsCard />
             <MoodCard />
           </aside>
         </div>

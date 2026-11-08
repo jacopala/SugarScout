@@ -74,6 +74,7 @@ function mockApi(overrides: Routes = {}) {
     '/api/chat/history': { body: [] },
     '/api/summary': { body: null },
     '/api/checkins': { body: [] },
+    '/api/meals': { body: [] },
     ...overrides,
   }
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -205,6 +206,9 @@ describe('mood check-in', () => {
     })
     renderAt('/child')
     fireEvent.click(await screen.findByRole('button', { name: '2 out of 5: Disappointed' }))
+    // The bar swells around the chosen face; nothing is saved until "That's me".
+    expect(screen.getByRole('button', { name: '2 out of 5: Disappointed' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'That’s me' }))
     expect(await screen.findByText('Aw, feeling disappointed is hard. Want to tell me what happened?')).toBeInTheDocument()
     const post = fetchSpy.mock.calls.find(([url, init]) => String(url) === '/api/checkins' && init?.method === 'POST')
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ mood: 2 })
@@ -224,5 +228,76 @@ describe('mood check-in', () => {
     expect(await screen.findByText('Sad')).toBeInTheDocument()
     expect(screen.getByText(/Today 3:42/)).toBeInTheDocument()
     expect(screen.getByText(/Today: 1 check-in, average 1\.0 of 5/)).toBeInTheDocument()
+  })
+})
+
+describe('child safety and meals', () => {
+  it('Help asks for confirmation before alerting the parent', async () => {
+    const fetchSpy = mockApi({
+      'POST /api/help': { body: { sent: true, already_open: false, reply: 'I told your grown-up you need help.' } },
+      'POST /api/voice/speak': { body: { audio: null } },
+    })
+    renderAt('/child/scout')
+    fireEvent.click(await screen.findByRole('button', { name: 'Help' }))
+    expect(screen.getByRole('dialog', { name: 'Tell your grown-up you need help?' })).toBeInTheDocument()
+    const helpCalls = () => fetchSpy.mock.calls.filter(([url]) => String(url) === '/api/help')
+    expect(helpCalls()).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, get help' }))
+    expect(await screen.findByRole('heading', { name: 'Your grown-up is on the way' })).toBeInTheDocument()
+    expect(helpCalls()).toHaveLength(1)
+  })
+
+  it('Not now closes the help dialog without sending anything', async () => {
+    const fetchSpy = mockApi()
+    renderAt('/child/scout')
+    fireEvent.click(await screen.findByRole('button', { name: 'Help' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(fetchSpy.mock.calls.some(([url]) => String(url) === '/api/help')).toBe(false)
+  })
+
+  it('logs a tapped meal and Scout thanks the child without numbers', async () => {
+    const fetchSpy = mockApi({
+      'POST /api/meals': { body: { id: 9, reply: "Yum! Thanks for telling me. I'll share it with your grown-up." } },
+      'POST /api/voice/speak': { body: { audio: null } },
+    })
+    renderAt('/child/scout')
+    fireEvent.click(await screen.findByRole('button', { name: 'Meals' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sandwich' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Juice' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tell Scout' }))
+    expect(await screen.findByText("Yum! Thanks for telling me. I'll share it with your grown-up.")).toBeInTheDocument()
+    const post = fetchSpy.mock.calls.find(([url, init]) => String(url) === '/api/meals' && init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ description: 'sandwich, juice', source: 'tap' })
+  })
+
+  it('shows meal estimates to the parent, labelled as AI estimates', async () => {
+    mockApi({
+      '/api/meals': {
+        body: [
+          {
+            id: 1,
+            description: 'a turkey sandwich and apple juice',
+            source: 'voice',
+            analysis_status: 'ok',
+            analysis: {
+              items: [],
+              confidence: 'medium',
+              note: 'Most of the sugar is from the juice.',
+              total_sugar_g: 26,
+              contains_gluten: true,
+            },
+            created_at: new Date().toISOString(),
+            glucose_1h: 168,
+          },
+        ],
+      },
+    })
+    renderAt('/parent')
+    expect(await screen.findByText('“a turkey sandwich and apple juice”')).toBeInTheDocument()
+    expect(screen.getByText('Sugar ~26 g')).toBeInTheDocument()
+    expect(screen.getByText('Contains gluten')).toBeInTheDocument()
+    expect(screen.getByText('Glucose 1 h later: 168')).toBeInTheDocument()
+    expect(screen.getByText(/Not a carb count for dosing/)).toBeInTheDocument()
   })
 })

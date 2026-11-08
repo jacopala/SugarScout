@@ -1,13 +1,15 @@
 import type { AlertOut, NotificationOut, Trend } from '../lib/api'
+import { AlertIcon, ArrowRightIcon, CheckIcon, PhoneIcon } from './Icons'
 import { useAckAlert, useAlerts, useDemoState, useLatest, useSetScenario } from '../lib/queries'
 import { BANDS } from '../lib/bands'
 
-const TREND_ARROW: Record<Trend, string> = {
-  double_up: '⇈',
-  up: '↑',
-  flat: '→',
-  down: '↓',
-  double_down: '⇊',
+// Arrow rotation per CGM trend (flat icon, rotated like a CGM's trend arrow).
+const TREND_ROTATE: Record<Trend, number> = {
+  double_up: -90,
+  up: -45,
+  flat: 0,
+  down: 45,
+  double_down: 90,
 }
 const TREND_LABEL: Record<Trend, string> = {
   double_up: 'rising fast',
@@ -34,7 +36,9 @@ export function GlucoseHero() {
         <p className="eyebrow">Current glucose</p>
         <p className="hero-value">No recent data</p>
         <p className="hero-meta">
-          <span className="status-chip" data-tone="bad">⚠ Sensor silent</span>
+          <span className="status-chip" data-tone="bad">
+            <AlertIcon size={14} strokeWidth={2.6} /> Sensor silent
+          </span>
           {data.age_s !== null ? ` Last reading ${Math.round(data.age_s)}s ago` : null}
         </p>
       </div>
@@ -49,12 +53,15 @@ export function GlucoseHero() {
         {data.value}
         <span className="hero-unit">mg/dL</span>
         <span className="hero-trend" aria-label={TREND_LABEL[trend]} title={TREND_LABEL[trend]}>
-          {TREND_ARROW[trend]}
+          <span style={{ display: 'inline-flex', transform: `rotate(${TREND_ROTATE[trend]}deg)` }}>
+            <ArrowRightIcon size={24} strokeWidth={2.4} />
+          </span>
         </span>
       </p>
       <p className="hero-meta">
         <span className="status-chip" data-tone={z.tone}>
-          {z.tone === 'ok' ? '●' : '▲'} {z.label}
+          {z.tone === 'ok' ? <CheckIcon size={14} strokeWidth={2.6} /> : <AlertIcon size={14} strokeWidth={2.6} />}{' '}
+          {z.label}
         </span>{' '}
         {TREND_LABEL[trend]} · updated {Math.round(data.age_s ?? 0)}s ago
       </p>
@@ -91,7 +98,8 @@ function AlertRow({ alert }: { alert: AlertOut }) {
       <div className="alert-main">
         <div className="alert-title">
           <span className="status-chip" data-tone={tone}>
-            {alert.state === 'resolved' ? '✓ Cleared' : alert.state === 'acknowledged' ? '✓ Seen' : '▲ Open'}
+            {alert.state === 'open' ? <AlertIcon size={14} strokeWidth={2.6} /> : <CheckIcon size={14} strokeWidth={2.6} />}
+            {alert.state === 'resolved' ? 'Cleared' : alert.state === 'acknowledged' ? 'Seen' : 'Open'}
           </span>
           <strong>{alert.label}</strong>
           <span className="alert-time">
@@ -100,7 +108,11 @@ function AlertRow({ alert }: { alert: AlertOut }) {
           </span>
         </div>
         <p className="alert-message">{alert.message}</p>
-        {sms ? <p className="alert-sms">📱 {sms}</p> : null}
+        {sms ? (
+          <p className="alert-sms" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <PhoneIcon size={14} /> {sms}
+          </p>
+        ) : null}
         <details className="alert-why">
           <summary>Why did this fire?</summary>
           <pre>{JSON.stringify(alert.trigger_data, null, 2)}</pre>
@@ -113,7 +125,7 @@ function AlertRow({ alert }: { alert: AlertOut }) {
           disabled={ack.isPending}
           aria-label={`Acknowledge ${alert.label} alert`}
         >
-          Acknowledge
+          {alert.rule_type === 'help_request' ? 'I’m on my way' : 'Acknowledge'}
         </button>
       ) : null}
     </li>

@@ -162,3 +162,50 @@ export function useCreateCheckin() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['checkins'] }),
   })
 }
+
+// ---- Help button & meals ------------------------------------------------------------
+
+export function useHelp() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiPost<{ sent: boolean; already_open: boolean; reply: string }>('/help'),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['child', 'status'] })
+      void qc.invalidateQueries({ queryKey: ['alerts'] })
+    },
+  })
+}
+
+export interface MealAnalysis {
+  items: { name: string; sugar_g: number; contains_gluten: boolean }[]
+  confidence: 'high' | 'medium' | 'low'
+  note: string
+  total_sugar_g: number
+  contains_gluten: boolean
+}
+
+export interface Meal {
+  id: number
+  description: string
+  source: 'voice' | 'tap' | 'text'
+  analysis_status: 'pending' | 'ok' | 'rejected' | 'error' | 'disabled'
+  analysis: MealAnalysis | null
+  created_at: string
+  glucose_1h: number | null
+}
+
+export const useMeals = (days = 1) =>
+  useQuery({
+    queryKey: ['meals', days],
+    queryFn: () => apiGet<Meal[]>(`/meals?days=${days}`),
+    refetchInterval: 5_000,
+  })
+
+export function useLogMeal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { description: string; source: 'voice' | 'tap' | 'text' }) =>
+      apiPost<{ id: number; reply: string }>('/meals', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meals'] }),
+  })
+}
