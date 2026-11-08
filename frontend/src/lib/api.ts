@@ -186,6 +186,9 @@ export interface VoiceTurn {
   emotion: string
   answered_question?: boolean
   open_meals?: boolean
+  concern_level?: string
+  suggest_call?: boolean
+  guardian_phone?: string | null
 }
 
 export async function apiDelete<T = unknown>(path: string): Promise<T> {

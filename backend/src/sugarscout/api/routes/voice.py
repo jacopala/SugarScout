@@ -17,7 +17,15 @@ from sugarscout.agent.questions import match_answer
 from sugarscout.ai.chat import handle_message
 from sugarscout.ai.speech import Emotion, speak, wav_to_pcm16k
 from sugarscout.ai.wake import parse_wake
-from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, deliver_now, enqueue
+from sugarscout.api.deps import (
+    DemoKey,
+    EngineDep,
+    RedisDep,
+    SettingsDep,
+    concern_fields,
+    deliver_now,
+    enqueue,
+)
 from sugarscout.demo import DEMO_CHILD_ID
 from sugarscout.log import get_logger
 
@@ -41,6 +49,9 @@ class VoiceTurnOut(BaseModel):
     emotion: str = "neutral"
     answered_question: bool = False
     open_meals: bool = False
+    concern_level: str = "none"
+    suggest_call: bool = False
+    guardian_phone: str | None = None
 
 
 class SpeakIn(BaseModel):
@@ -140,6 +151,7 @@ async def turn(
         flagged=result.flagged,
         escalated=result.escalated,
         audio=audio,
+        **concern_fields(result.concern, settings),
     )
 
 

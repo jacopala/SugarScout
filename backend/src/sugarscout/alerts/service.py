@@ -50,6 +50,7 @@ RULE_LABELS: dict[str, str] = {
     "predicted_high": "high soon",
     "symptoms_reported": "symptoms reported",
     "agent_heads_up": "Scout heads-up",
+    "child_concern": "worried words",
 }
 
 
@@ -239,7 +240,7 @@ async def raise_alert(
 
 # Alerts no reading can clear: a parent acknowledgement closes them.
 ACK_RESOLVES = frozenset(
-    {"emergency_language", "help_request", "symptoms_reported", "agent_heads_up"}
+    {"emergency_language", "help_request", "symptoms_reported", "agent_heads_up", "child_concern"}
 )
 
 

@@ -420,3 +420,97 @@ describe('Scout agent', () => {
     expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true')
   })
 })
+
+describe('child delight and concern', () => {
+  const fakeCtx = {
+    scale: vi.fn(),
+    clearRect: vi.fn(),
+    beginPath: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    globalAlpha: 1,
+    fillStyle: '',
+  }
+
+  it('fireworks on the happy faces only', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(fakeCtx as unknown as CanvasRenderingContext2D)
+    mockApi()
+    renderAt('/child')
+    fireEvent.click(await screen.findByRole('button', { name: '1 out of 5: Sad' }))
+    expect(document.querySelector('canvas.fireworks')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '5 out of 5: Happy' }))
+    expect(document.querySelector('canvas.fireworks')).not.toBeNull()
+  })
+
+  it('the sad face leads to an offer to call a grown-up', async () => {
+    mockApi({
+      'POST /api/checkins': {
+        body: {
+          id: 9,
+          mood: 1,
+          label: 'sad',
+          source: 'tap',
+          created_at: new Date().toISOString(),
+          reply: 'I’m sorry you feel sad. I’m here with you.',
+          emotion: 'calm',
+          concern_level: 'moderate',
+          suggest_call: true,
+          guardian_phone: '+15550100',
+        },
+      },
+      'POST /api/voice/speak': { body: { audio: null } },
+    })
+    renderAt('/child')
+    fireEvent.click(await screen.findByRole('button', { name: '1 out of 5: Sad' }))
+    fireEvent.click(screen.getByRole('button', { name: 'That’s me' }))
+    expect(await screen.findByText('Want to talk to your grown-up?')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Call my grown-up' })).toHaveAttribute('href', 'tel:+15550100')
+    fireEvent.click(screen.getByRole('button', { name: 'I’m okay' }))
+    expect(screen.queryByText('Want to talk to your grown-up?')).toBeNull()
+  })
+
+  it('worried words in chat offer the call; ordinary chat does not', async () => {
+    const replies = [
+      { reply: 'Here is a joke!', flagged: null, escalated: false, emotion: 'happy', suggest_call: false },
+      {
+        reply: 'I hear you. Would you like to call your grown-up? You can tap the call button.',
+        flagged: null,
+        escalated: false,
+        emotion: 'calm',
+        concern_level: 'moderate',
+        suggest_call: true,
+        guardian_phone: null,
+      },
+    ]
+    const fetchSpy = mockApi({ 'POST /api/voice/speak': { body: { audio: null } } })
+    const base = fetchSpy.getMockImplementation()!
+    fetchSpy.mockImplementation(async (input, init) =>
+      String(input) === '/api/chat' && init?.method === 'POST'
+        ? new Response(JSON.stringify(replies.shift()), { headers: { 'content-type': 'application/json' } })
+        : base(input, init),
+    )
+    renderAt('/child/scout')
+    const box = await screen.findByLabelText('Message Scout')
+    fireEvent.change(box, { target: { value: 'tell me a joke' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await screen.findByText('Here is a joke!')).toBeInTheDocument()
+    expect(screen.queryByText('Want to talk to your grown-up?')).toBeNull()
+
+    fireEvent.change(box, { target: { value: 'I want my mom' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await screen.findByText('Want to talk to your grown-up?')).toBeInTheDocument()
+    // No number on file: the card still offers to send for them.
+    expect(screen.queryByRole('link', { name: 'Call my grown-up' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Ask them to come' })).toBeInTheDocument()
+  })
+
+  it('Sky Pop opens from Scout and keeps the Help button on screen', async () => {
+    mockApi()
+    renderAt('/child/scout')
+    fireEvent.click(await screen.findByRole('link', { name: 'Play' }))
+    expect(await screen.findByRole('heading', { name: 'Sky Pop' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Help' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    expect(screen.queryByRole('heading', { name: 'Sky Pop' })).toBeNull()
+  })
+})

@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router'
 
 import { ChildGuard } from './routes/child/ChildGuard'
 import { MoodCheck } from './routes/child/MoodCheck'
+import { PlayGame } from './routes/child/PlayGame'
 import { ScoutDisplay } from './routes/child/ScoutDisplay'
 import { Home } from './routes/Home'
 import { NotFound, RouteError } from './routes/NotFound'
@@ -21,6 +22,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <MoodCheck /> },
       { path: 'scout', element: <ScoutDisplay /> },
+      { path: 'play', element: <PlayGame /> },
     ],
   },
   {

@@ -2,6 +2,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 
+import { CallGrownUp, type ConcernOffer } from '../../components/CallGrownUp'
+import { Fireworks } from '../../components/Fireworks'
 import { HelpButton } from '../../components/HelpButton'
 import {
   ForkKnifeIcon,
@@ -11,6 +13,7 @@ import {
   MicIcon,
   ScoutAvatar,
   SmileIcon,
+  SparkleIcon,
 } from '../../components/Icons'
 import { MealSheet } from '../../components/MealSheet'
 import { QuestionCard } from '../../components/QuestionCard'
@@ -36,7 +39,11 @@ interface Caption {
 
 export function ScoutDisplay() {
   const location = useLocation()
-  const nav = location.state as { greeting?: string; emotion?: string } | null
+  const nav = location.state as {
+    greeting?: string
+    emotion?: string
+    callOffer?: { phone: string | null } | null
+  } | null
   const greeting = nav?.greeting ?? null
   const greetingEmotion = nav?.emotion ?? 'neutral'
   const qc = useQueryClient()
@@ -49,6 +56,12 @@ export function ScoutDisplay() {
   const [typing, setTyping] = useState(false)
   const [meals, setMeals] = useState(false)
   const [draft, setDraft] = useState('')
+  const [show, setShow] = useState(0)
+  // Set when Scout suggests calling a grown-up (worried words, or the sad face).
+  const [callOffer, setCallOffer] = useState<{ phone: string | null } | null>(nav?.callOffer ?? null)
+  const offerCall = (r: ConcernOffer) => {
+    if (r.suggest_call) setCallOffer({ phone: r.guardian_phone ?? null })
+  }
   const greeted = useRef(false)
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -63,6 +76,7 @@ export function ScoutDisplay() {
       void qc.invalidateQueries({ queryKey: ['agent'] })
     }
     if (turn.open_meals) setMeals(true)
+    offerCall(turn)
   })
 
   // Scout reads each new agent question out loud once.
@@ -128,6 +142,7 @@ export function ScoutDisplay() {
       onSuccess: (data) => {
         setCaption({ you: message, scout: data.reply })
         void voice.say(data.reply, data.emotion)
+        offerCall(data)
       },
     })
   }
@@ -145,10 +160,10 @@ export function ScoutDisplay() {
     <main className={q ? 'scout-screen has-question' : 'scout-screen'}>
       <div className="scout-top">
         <div className="child-band-top">
-          <span className="scout-name">
+          <button type="button" className="scout-name" onClick={() => setShow((n) => n + 1)} aria-label="Scout. Tap for fireworks">
             <ScoutAvatar size={40} />
             Scout
-          </span>
+          </button>
           <HelpButton
             onSent={(reply) => {
               setCaption({ you: null, scout: reply })
@@ -170,6 +185,17 @@ export function ScoutDisplay() {
             {helpActive ? <MegaphoneIcon size={22} /> : <HeartIcon size={22} />}
             <p>{status.data.reminder}</p>
           </div>
+        ) : null}
+
+        {callOffer ? (
+          <CallGrownUp
+            phone={callOffer.phone}
+            onHelpSent={(reply) => {
+              setCaption({ you: null, scout: reply })
+              void voice.say(reply, 'calm')
+            }}
+            onDismiss={() => setCallOffer(null)}
+          />
         ) : null}
 
         {q ? <QuestionCard question={q} onAnswer={onAnswer} busy={answer.isPending} /> : null}
@@ -232,13 +258,18 @@ export function ScoutDisplay() {
             <SmileIcon size={20} />
             Mood
           </Link>
-          <button className="pill pill-pink" onClick={openMeals}>
+          <button className="pill pill-blue" onClick={openMeals}>
             <ForkKnifeIcon size={20} />
             Meals
           </button>
+          <Link className="pill pill-play" to="/child/play" onClick={() => voice.stop()}>
+            <SparkleIcon size={20} />
+            Play
+          </Link>
         </nav>
       </section>
 
+      {show > 0 ? <Fireworks key={show} onDone={() => setShow(0)} /> : null}
       {meals ? (
         <MealSheet
           onClose={() => setMeals(false)}

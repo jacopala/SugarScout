@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import type { ConcernOffer } from '../components/CallGrownUp'
+
 import {
   apiDelete,
   apiGet,
@@ -92,7 +94,7 @@ export function useSendChat() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (message: string) =>
-      apiPost<{ reply: string; flagged: string | null; escalated: boolean; emotion: string }>('/chat', {
+      apiPost<{ reply: string; flagged: string | null; escalated: boolean; emotion: string } & ConcernOffer>('/chat', {
         message,
       }),
     onSettled: () => {
@@ -160,7 +162,8 @@ export const useCheckins = (days = 7) =>
 export function useCreateCheckin() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (mood: number) => apiPost<Checkin & { reply: string; emotion: string }>('/checkins', { mood }),
+    mutationFn: (mood: number) =>
+      apiPost<Checkin & { reply: string; emotion: string } & ConcernOffer>('/checkins', { mood }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['checkins'] }),
   })
 }
