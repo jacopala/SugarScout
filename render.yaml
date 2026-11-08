@@ -3,7 +3,8 @@
 #
 # Secrets are `sync: false`: Render asks for them when you create the Blueprint.
 #   API:    DATABASE_URL, DEMO_ACCESS_CODE, CORS_ORIGINS, NVIDIA_API_KEY
-#   Worker: DATABASE_URL, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM, PARENT_PHONE
+#   Worker: DATABASE_URL, TWILIO_*, PARENT_PHONE, NVIDIA_API_KEY, VAPID_*
+#   API also: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (generate with scripts/vapid.py)
 #
 # The worker runs the fake CGM and the rules, so it must be a paid always-on
 # instance (free instances don't run background workers). Pick the Render region
@@ -50,6 +51,10 @@ services:
         sync: false # your Vercel URL, e.g. https://sugarscout.vercel.app
       - key: NVIDIA_API_KEY
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false # from: uv run python scripts/vapid.py
+      - key: VAPID_PRIVATE_KEY
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -80,6 +85,12 @@ services:
         sync: false # your Twilio trial number, +1XXXXXXXXXX
       - key: PARENT_PHONE
         sync: false # your verified phone, +1XXXXXXXXXX
+      - key: NVIDIA_API_KEY
+        sync: false # the worker runs the Scout agent and meal estimates
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false # same key pair as the API
       - key: TWILIO_TRIAL_TEMPLATE
         value: sms_internal_alerts # trial accounts can't send custom text; clear after upgrading
       - key: REDIS_URL

@@ -319,3 +319,20 @@ async def test_spoken_answer_without_wake_word(
     data = (await c.post("/voice/turn", content=CLIP)).json()
     assert data["answered_question"] is True and data["reply"].startswith("Great")
     assert (await c.get("/agent/question")).json() is None
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Alex is rising after a snack. Consider checking if insulin is needed.",
+        "Alex needs insulin now.",
+        "Consider giving a correction bolus.",
+    ],
+)
+def test_heads_up_never_nudges_treatment(message: str) -> None:
+    s = sit(**RISING)
+    d = apply_guardrails(
+        {"ask": None, "heads_up": {"send": True, "message": message}}, s, eligible(s)
+    )
+    assert d.heads_up is not None and "insulin is needed" not in d.heads_up
+    assert "heads-up wording replaced" in d.overrides

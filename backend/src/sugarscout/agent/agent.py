@@ -47,7 +47,8 @@ with type 1 diabetes. You see the latest facts and decide two things:
    it would help them act sooner). Urgent alerts are handled separately by fixed rules, so
    never write as if it is an emergency. Never give dosing or treatment advice. State the
    facts plainly (glucose, trend, food, insulin timing, how {name} feels) in 1-2 sentences.
-   Refer to the child as {name} or "they"; never assume he or she.
+   Refer to the child as {name} or "they"; never assume he or she. Do not say whether insulin
+   or treatment is needed; at most suggest checking in with {name}.
 
 Return ONLY JSON:
 {{"ask": "<question id or null>", "wording": "<child-facing question>",
@@ -79,7 +80,20 @@ def _parent_safe(message: str) -> bool:
     """Parents get plain facts (numbers, carbs, insulin timing are fine); what's blocked is
     anything that reads like dosing or treatment advice."""
     m = message.strip()
-    return 0 < len(m) <= MAX_HEADS_UP and not any(p.search(m.lower()) for p in _PARENT_ADVICE)
+    lowered = m.lower()
+    return (
+        0 < len(m) <= MAX_HEADS_UP
+        and not any(p.search(lowered) for p in _PARENT_ADVICE)
+        and not _TREATMENT_NUDGE.search(lowered)
+    )
+
+
+# "Consider checking if insulin is needed" isn't a dose, but it is a treatment decision.
+_TREATMENT_NUDGE = re.compile(
+    r"(insulin|bolus|correction|treat\w*)\b.{0,25}\b(is |are )?(needed|required|necessary)"
+    r"|\bneeds? (more |some )?(insulin|a bolus|a correction|treatment)"
+    r"|\bconsider (giving|checking|dosing|treating)\b.{0,30}\b(insulin|bolus|dose|correction)"
+)
 
 
 def heads_up_allowed(s: Situation) -> bool:

@@ -12,23 +12,37 @@ The full design is in *Pediatric Health Companion: Design Document and Implement
 | --- | --- |
 | Glucose data | **Fake CGM** in the worker: one reading every 5 s with real timestamps, sped-up dynamics, and presenter-controlled scenarios |
 | Rules and alerts | Real: deterministic rules on raw readings, dedupe, auto-resolve, an audit trail ("Why did this fire?") |
-| SMS | Real via a Twilio trial account (it only texts verified numbers). Without keys it runs as a dry run, logged and never sent |
+| Parent alerts | **Browser push** with the real message about the child (dashboard + push for every alert; install the parent page to the Home Screen on iPhone). SMS via a Twilio trial is an urgent-only backup and can only send Twilio's canned template text |
+| Forecast | ~20-minute trend forecast on every reading, scored against what happened; drives *low soon* alerts |
+| Scout agent | Nemotron chooses which allowed question to ask and drafts non-urgent heads-ups; fixed rules make every urgent decision |
+| Insulin | Parents log doses (record-only); the child can answer "did you have your insulin?". Never calculated or suggested |
 | Scout (child) | Voice-first display: say "Hey Scout", then talk. Speech recognition is **Riva Parakeet** and Scout's voice is **Magpie TTS**, both on NVIDIA's cloud. Replies come from Nemotron 3.5 Lightning, with a deterministic emergency bypass and an output filter. Typing is the fallback |
 | Mood check-in | The child's landing page asks "How are you feeling today?" (1–5). Each answer is saved with its time and shown to the parent. Scout replies with a fixed gentle line, and moods never trigger alerts |
 | Parent summary | Real: Nemotron Super words stats that were computed in code. The output is validated and rejected if unsafe |
 | Sign-in | Replaced by one `DEMO_ACCESS_CODE` |
 
-### Demo script (about 4 minutes)
+### How the Scout agent works
 
-Open `/parent` on the laptop and `/child` in **Chrome** on a second screen. Allow the microphone, and use headphones or a quiet room.
+Every 15 seconds (and right after a meal, insulin entry or answer), SugarScout:
 
-1. **Steady.** Point out the live line, the 7-day chart, and that there are no alerts.
-2. **Check-in and voice.** On the child view, tap a mood (it appears on the parent's Mood card with the time). Scout says a gentle line. Tap **Start listening**, then say *"Hey Scout, tell me a joke."* Scout answers out loud, with captions.
-3. **Rapid drop.** Click **Rapid drop** under Demo controls. Within about 30 s, an **urgent low** alert opens and your phone gets a text. The child view shows a calm reminder from the care plan, with no numbers.
-4. **Acknowledge, then Recover.** The alerts auto-resolve and an all-clear text arrives. Open "Why did this fire?" to show the exact readings and thresholds behind the alert.
-5. **Sensor dropout.** About 30 s later a **data gap** alert fires. Silence is never treated as "fine". Then click **Recover**.
-6. **Emergency language.** Say *"Hey Scout, I feel really dizzy and shaky."* The model is bypassed: Scout speaks a scripted reply, an urgent alert opens, and the parent gets a text.
-7. **Weekly summary.** Click **Generate summary**. Nemotron Super writes it from stats computed in code. Each claim links to the number it's based on, and the card is labelled AI-generated.
+1. **Builds the situation in code:** glucose, a ~20-minute trend forecast (and how accurate past forecasts were), meals and their estimated carbs, insulin timing, moods, open alerts, and a concern level (0–2) with reasons.
+2. **Applies fixed rules:** thresholds, *low soon* / *urgent low soon* from the forecast, and *symptoms reported* (the child says shaky or dizzy while low or falling). These are the only things that send urgent alerts.
+3. **Asks Nemotron to advise:** pick one question from the questions allowed right now (how do you feel, did you have insulin with your snack, when did you last eat, how do you feel after eating, daily mood), word it for a child, and optionally draft a non-urgent heads-up for the parent.
+4. **Enforces guardrails:** a question that isn't allowed, child wording with numbers or medical advice, a heads-up without concern, or dosing advice is overridden. Every decision is stored and shown on the parent's **Scout agent** timeline.
+
+Why no ML prediction model: there's no real patient data to train or validate one, and a learned predictor would be a medical device. The forecast is the same idea CGMs use for "urgent low soon": a trend line, scored against what actually happened.
+
+### Demo script (about 5 minutes)
+
+Open `/parent` on the laptop (tap **Alert me on this device** once, and allow notifications) and `/child` in **Chrome** on a phone or second screen.
+
+1. **Daily check-in.** On the child view, tap a face on the mood bar, then **That's me**. Scout says a gentle line; the parent sees it with the time.
+2. **Voice.** Tap the mic and say *"Tell me a joke."* Double-tap the mic to stop listening.
+3. **Snack, no insulin.** Under Demo controls click **Big snack, no insulin** (or have the child log a meal). Glucose climbs. Scout asks *"Did you have your insulin with your snack?"* out loud. The parent's phone gets a **push heads-up** with the facts (glucose, carbs, no insulin logged). Answer **Not yet**.
+4. **Parent logs insulin** on the Insulin card. The rise flattens on the live chart (dashed line = forecast).
+5. **Low soon.** Click **Rapid drop**. Before glucose crosses 70, an **urgent low soon** push arrives with the forecast. Scout asks *"How do you feel right now?"* Tap **Shaky**: a rule escalates with Alex's own words in the push.
+6. **Help button.** On the child view tap **Help**, then **Yes, get help**. The parent's push says Alex needs them; tap **I'm on my way**.
+7. **Timeline and summary.** Show the Scout agent timeline (each question, answer and heads-up with reasons), then **Generate summary**.
 
 Pitch line: *the AI talks; fixed rules decide.*
 
