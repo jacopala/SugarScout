@@ -45,7 +45,9 @@ interface Caption {
 
 export function ScoutDisplay() {
   const location = useLocation()
-  const greeting = (location.state as { greeting?: string } | null)?.greeting ?? null
+  const nav = location.state as { greeting?: string; emotion?: string } | null
+  const greeting = nav?.greeting ?? null
+  const greetingEmotion = nav?.emotion ?? 'neutral'
   const qc = useQueryClient()
   const status = useChildStatus()
   const send = useSendChat()
@@ -63,9 +65,9 @@ export function ScoutDisplay() {
   useEffect(() => {
     if (greeting && !greeted.current) {
       greeted.current = true
-      void voice.say(greeting)
+      void voice.say(greeting, greetingEmotion)
     }
-  }, [greeting, voice])
+  }, [greeting, greetingEmotion, voice])
 
   const showText = typing || !voice.supported
 
@@ -78,7 +80,7 @@ export function ScoutDisplay() {
     send.mutate(message, {
       onSuccess: (data) => {
         setCaption({ you: message, scout: data.reply })
-        void voice.say(data.reply)
+        void voice.say(data.reply, data.emotion)
       },
     })
   }

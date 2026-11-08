@@ -23,6 +23,7 @@ class ChatOut(BaseModel):
     reply: str
     flagged: str | None
     escalated: bool
+    emotion: str = "neutral"
 
 
 class MessageOut(BaseModel):
@@ -65,4 +66,9 @@ async def chat(
     )
     for nid in result.sms_ids:
         await enqueue(request, "send_sms", nid)
-    return ChatOut(reply=result.reply, flagged=result.flagged, escalated=result.escalated)
+    return ChatOut(
+        reply=result.reply,
+        flagged=result.flagged,
+        escalated=result.escalated,
+        emotion=result.emotion,
+    )

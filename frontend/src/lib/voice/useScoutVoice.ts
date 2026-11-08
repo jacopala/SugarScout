@@ -24,7 +24,7 @@ export interface ScoutVoice {
   start: () => Promise<void>
   stop: () => void
   wake: () => void // tap-to-talk: skip the wake word for the next phrase
-  say: (text: string) => Promise<void>
+  say: (text: string, emotion?: string) => Promise<void>
 }
 
 const AWAKE_MS = 8_000
@@ -110,10 +110,10 @@ export function useScoutVoice(onTurn: (turn: VoiceTurn) => void): ScoutVoice {
   )
 
   const say = useCallback(
-    async (text: string) => {
+    async (text: string, emotion = 'neutral') => {
       let audio: string | null
       try {
-        audio = (await apiPost<{ audio: string | null }>('/voice/speak', { text })).audio
+        audio = (await apiPost<{ audio: string | null }>('/voice/speak', { text, emotion })).audio
       } catch {
         audio = null // fall back to the browser's own voice
       }

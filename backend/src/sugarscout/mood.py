@@ -76,3 +76,7 @@ MOOD_REPLIES: dict[int, str] = {
     4: "Yay, I'm glad you're feeling good! What's been fun today?",
     5: "Woohoo! I'm so happy you feel great! What made today awesome?",
 }
+
+
+# How Scout's voice sounds for each mood reply.
+MOOD_EMOTIONS: dict[int, str] = {1: "sad", 2: "sad", 3: "neutral", 4: "happy", 5: "happy"}

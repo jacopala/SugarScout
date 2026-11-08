@@ -12,7 +12,7 @@ import hashlib
 import io
 import re
 import wave
-from typing import Protocol
+from typing import Literal, Protocol, get_args
 
 from redis.asyncio import Redis
 
@@ -22,6 +22,40 @@ from sugarscout.settings import Settings
 log = get_logger(__name__)
 
 ASR_SAMPLE_RATE = 16_000
+
+# How Scout should sound. Magpie expresses this through emotion sub-voices.
+Emotion = Literal["happy", "calm", "sad", "neutral"]
+EMOTIONS: tuple[str, ...] = get_args(Emotion)
+
+# Emotion sub-voices each English Magpie speaker offers (GetRivaSynthesisConfig,
+# Nov 2026). Angry and Fearful exist too but Scout never uses them.
+VOICE_EMOTIONS: dict[str, set[str]] = {
+    "Jason": {"Neutral", "Calm", "Happy"},
+    "Mia": {"Neutral", "Calm", "Sad"},
+    "Aria": {"Neutral", "Calm", "Sad"},
+    "Leo": {"Neutral", "Calm", "Sad"},
+    "Sofia": {"Neutral", "Calm"},
+    "Ray": {"Neutral", "Calm"},
+}
+# Closest available sound when a speaker lacks the exact emotion.
+_FALLBACK: dict[str, tuple[str, ...]] = {
+    "happy": ("Happy", "Neutral"),
+    "calm": ("Calm", "Neutral"),
+    "sad": ("Sad", "Calm", "Neutral"),
+    "neutral": ("Neutral",),
+}
+
+
+def voice_for(base_voice: str, emotion: str) -> str:
+    """'Magpie-Multilingual.EN-US.Jason' + 'happy' -> 'Magpie-Multilingual.EN-US.Jason.Happy'."""
+    speaker = base_voice.rsplit(".", 1)[-1]
+    available = VOICE_EMOTIONS.get(speaker, set())
+    for e in _FALLBACK.get(emotion, ("Neutral",)):
+        if e in available:
+            return f"{base_voice}.{e}"
+    return base_voice
+
+
 TTS_CACHE_TTL_S = 24 * 3600
 
 _EMOJI = re.compile(
@@ -61,7 +95,7 @@ def wav_to_pcm16k(data: bytes) -> bytes:
 class SpeechClient(Protocol):
     async def transcribe(self, pcm16k: bytes) -> str: ...
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, emotion: str = "neutral") -> bytes:
         """Returns a complete WAV file."""
         ...
 
@@ -103,13 +137,14 @@ class RivaSpeech:
 
         return await asyncio.wait_for(asyncio.to_thread(run), timeout=self._settings.llm_timeout_s)
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, emotion: str = "neutral") -> bytes:
         rate = self._settings.riva_tts_sample_rate
+        voice = voice_for(self._settings.riva_tts_voice, emotion)
 
         def run() -> bytes:
             resp = self._tts.synthesize(
                 text,
-                voice_name=self._settings.riva_tts_voice,
+                voice_name=voice,
                 language_code="en-US",
                 sample_rate_hz=rate,
             )
@@ -129,14 +164,21 @@ def get_speech(settings: Settings) -> SpeechClient | None:
 
 
 async def speak(
-    speech: SpeechClient | None, redis: Redis, settings: Settings, text: str
+    speech: SpeechClient | None,
+    redis: Redis,
+    settings: Settings,
+    text: str,
+    emotion: str = "neutral",
 ) -> str | None:
     """Base64 WAV for `text`, or None if speech is unavailable (the browser then falls
     back to its own voice). Repeated lines come from a Redis cache."""
     spoken = clean_for_speech(text)
     if speech is None or not spoken:
         return None
-    key = "tts:" + hashlib.sha256(f"{settings.riva_tts_voice}|{spoken}".encode()).hexdigest()
+    if emotion not in EMOTIONS:
+        emotion = "neutral"
+    voice = voice_for(settings.riva_tts_voice, emotion)
+    key = "tts:" + hashlib.sha256(f"{voice}|{spoken}".encode()).hexdigest()
     try:
         cached = await redis.get(key)
         if cached:
@@ -144,7 +186,7 @@ async def speak(
     except Exception:
         cached = None
     try:
-        audio = base64.b64encode(await speech.synthesize(spoken)).decode()
+        audio = base64.b64encode(await speech.synthesize(spoken, emotion)).decode()
     except Exception as exc:
         log.warning("speech.tts_failed", error=repr(exc))
         return None

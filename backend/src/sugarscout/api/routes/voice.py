@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from sugarscout.ai.chat import handle_message
-from sugarscout.ai.speech import speak, wav_to_pcm16k
+from sugarscout.ai.speech import Emotion, speak, wav_to_pcm16k
 from sugarscout.ai.wake import parse_wake
 from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, enqueue
 from sugarscout.demo import DEMO_CHILD_ID
@@ -36,10 +36,12 @@ class VoiceTurnOut(BaseModel):
     flagged: str | None = None
     escalated: bool = False
     audio: str | None = None  # base64 WAV; None means "use the browser's voice"
+    emotion: str = "neutral"
 
 
 class SpeakIn(BaseModel):
     text: str = Field(min_length=1, max_length=500)
+    emotion: Emotion = "neutral"
 
 
 class SpeakOut(BaseModel):
@@ -81,9 +83,14 @@ async def turn(
         if not woke:
             return VoiceTurnOut(heard=False, woke=False)
         # "Hey Scout" on its own: acknowledge and stay awake for the request.
-        audio = await speak(speech, redis, settings, LISTENING_REPLY)
+        audio = await speak(speech, redis, settings, LISTENING_REPLY, "happy")
         return VoiceTurnOut(
-            heard=True, woke=True, awake_for_s=AWAKE_WINDOW_S, reply=LISTENING_REPLY, audio=audio
+            heard=True,
+            woke=True,
+            awake_for_s=AWAKE_WINDOW_S,
+            reply=LISTENING_REPLY,
+            audio=audio,
+            emotion="happy",
         )
 
     result = await handle_message(
@@ -97,8 +104,9 @@ async def turn(
     )
     for nid in result.sms_ids:
         await enqueue(request, "send_sms", nid)
-    audio = await speak(speech, redis, settings, result.reply)
+    audio = await speak(speech, redis, settings, result.reply, result.emotion)
     return VoiceTurnOut(
+        emotion=result.emotion,
         heard=True,
         woke=woke,
         transcript=message,
@@ -113,4 +121,6 @@ async def turn(
 async def speak_text(
     body: SpeakIn, request: Request, redis: RedisDep, settings: SettingsDep
 ) -> SpeakOut:
-    return SpeakOut(audio=await speak(request.app.state.speech, redis, settings, body.text))
+    return SpeakOut(
+        audio=await speak(request.app.state.speech, redis, settings, body.text, body.emotion)
+    )

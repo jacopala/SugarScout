@@ -13,7 +13,7 @@ export function MoodCheck() {
   function pick(mood: number) {
     if (create.isPending) return
     create.mutate(mood, {
-      onSuccess: (data) => navigate('/child/scout', { state: { greeting: data.reply } }),
+      onSuccess: (data) => navigate('/child/scout', { state: { greeting: data.reply, emotion: data.emotion } }),
     })
   }
 

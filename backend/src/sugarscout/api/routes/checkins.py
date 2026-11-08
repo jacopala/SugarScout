@@ -30,12 +30,15 @@ class CheckinOut(BaseModel):
 
 class CheckinCreated(CheckinOut):
     reply: str
+    emotion: str
 
 
 @router.post("", response_model=CheckinCreated, dependencies=[DemoKey])
 async def create(body: CheckinIn, engine: EngineDep) -> CheckinCreated:
     row = await mood.record(engine, DEMO_CHILD_ID, body.mood, body.source)
-    return CheckinCreated.model_validate({**row, "reply": mood.MOOD_REPLIES[body.mood]})
+    return CheckinCreated.model_validate(
+        {**row, "reply": mood.MOOD_REPLIES[body.mood], "emotion": mood.MOOD_EMOTIONS[body.mood]}
+    )
 
 
 @router.get("", response_model=list[CheckinOut])

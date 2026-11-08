@@ -6,6 +6,7 @@ model sees the message, and they escalate through the same alert path as glucose
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -32,6 +33,8 @@ log = get_logger(__name__)
 
 HISTORY_TURNS = 10
 MOOD_CONTEXT_HOURS = 3
+NO_REMINDER = "none right now."
+
 MAX_REPLY_TOKENS = 600  # headroom for reasoning models; the persona keeps replies short
 
 MODEL_DOWN_REPLY = "I'm having a little trouble thinking right now. Can you try again in a moment?"
@@ -46,6 +49,10 @@ How you talk:
 - Ask at most one question at a time.
 - {name} may have misheard words in their message (it came from speech recognition);
   guess kindly what they meant.
+- Start EVERY reply with exactly one tone tag that says how your voice should sound:
+  [happy] for fun, jokes, and good news; [calm] for reminders, worries, or feeling unwell;
+  [sad] only to gently say you're sorry someone feels bad; [neutral] otherwise.
+  Example: "[happy] Why did the cookie go to the doctor? It felt crummy!"
 
 Hard rules:
 - You are not a doctor. Never diagnose. Never give or change insulin doses, carb counts, or treatment. Never promise that someone is safe.
@@ -62,12 +69,24 @@ Right now:
 - How {name} said they feel: {mood}. If it was low, be extra gentle and check in."""
 
 
+_TONE = re.compile(r"^\s*\[(happy|calm|sad|neutral)\]\s*", re.IGNORECASE)
+_STRAY_TAGS = re.compile(r"\[(?:happy|calm|sad|neutral)\]\s*", re.IGNORECASE)
+
+
+def split_tone(reply: str) -> tuple[str, str]:
+    """'[happy] Hi!' -> ('happy', 'Hi!'). Missing tag -> neutral."""
+    m = _TONE.match(reply)
+    tone = m.group(1).lower() if m else "neutral"
+    return tone, _STRAY_TAGS.sub("", reply[m.end() :] if m else reply).strip()
+
+
 @dataclass(frozen=True)
 class ChatResult:
     reply: str
     flagged: str | None  # emergency | filtered | fallback | None
     escalated: bool
     sms_ids: list[int]
+    emotion: str = "neutral"  # how Scout's voice should sound (ai/speech.py)
 
 
 async def _store(
@@ -129,7 +148,7 @@ async def _context(
     )
     rule = next((r for r in REMINDER_PRIORITY if r in active), None)
     reminder = (
-        f'"{CHILD_REMINDERS[rule]}" Mention it gently in your reply.' if rule else "none right now."
+        f'"{CHILD_REMINDERS[rule]}" Mention it gently in your reply.' if rule else NO_REMINDER
     )
     turns = [
         {"role": "user" if r.role == "child" else "assistant", "content": r.content}
@@ -172,7 +191,7 @@ async def handle_message(
             alert_id, sms_ids = await raise_alert(conn, redis, settings, child_id, child_name, hit)
         await _store(engine, child_id, "companion", reply, "emergency")
         log.warning("chat.emergency", category=emergency.category, alert_id=alert_id)
-        return ChatResult(reply, "emergency", True, sms_ids)
+        return ChatResult(reply, "emergency", True, sms_ids, emotion="calm")
 
     # 2. Context assembly (before storing the new message, so history excludes it).
     glucose, reminder, mood_text, turns = await _context(engine, child_id)
@@ -180,7 +199,7 @@ async def handle_message(
 
     if model is None:
         await _store(engine, child_id, "companion", AI_OFF_REPLY, "fallback")
-        return ChatResult(AI_OFF_REPLY, "fallback", False, [])
+        return ChatResult(AI_OFF_REPLY, "fallback", False, [], emotion="happy")
 
     system = PERSONA.format(
         name=child_name,
@@ -199,16 +218,19 @@ async def handle_message(
     except Exception as exc:
         log.warning("chat.model_error", error=repr(exc))
         await _store(engine, child_id, "companion", MODEL_DOWN_REPLY, "fallback")
-        return ChatResult(MODEL_DOWN_REPLY, "fallback", False, [])
+        return ChatResult(MODEL_DOWN_REPLY, "fallback", False, [], emotion="calm")
 
-    # 4. Post-filter.
+    # 4. Tone tag, then post-filter.
+    emotion, reply = split_tone(reply)
+    if reminder != NO_REMINDER and emotion == "happy":
+        emotion = "calm"  # never sound cheerful while relaying a care-plan reminder
     flagged: str | None = None
     if not reply:
-        reply, flagged = MODEL_DOWN_REPLY, "fallback"
+        reply, flagged, emotion = MODEL_DOWN_REPLY, "fallback", "calm"
     elif (matched := check_output(reply)) is not None:
         log.warning("chat.output_filtered", pattern=matched, original=reply)
-        reply, flagged = SAFE_FALLBACK, "filtered"
+        reply, flagged, emotion = SAFE_FALLBACK, "filtered", "calm"
 
-    # 5. Logging.
+    # 5. Logging (stored without the tone tag).
     await _store(engine, child_id, "companion", reply, flagged)
-    return ChatResult(reply, flagged, False, [])
+    return ChatResult(reply, flagged, False, [], emotion=emotion)

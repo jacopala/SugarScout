@@ -93,7 +93,9 @@ class Settings(BaseSettings):
     riva_server: str = "grpc.nvcf.nvidia.com:443"
     riva_asr_function_id: str = "1598d209-5e27-4d3c-8079-4751568b1081"  # parakeet-ctc-1.1b-asr
     riva_tts_function_id: str = "877104f7-e885-42b9-8de8-f6e4c6303969"  # magpie-tts-multilingual
-    riva_tts_voice: str = "Magpie-Multilingual.EN-US.Sofia"
+    # Jason is the only English Magpie speaker with a Happy emotion; Scout adds the
+    # emotion per line (ai/speech.py voice_for), e.g. ...EN-US.Jason.Happy.
+    riva_tts_voice: str = "Magpie-Multilingual.EN-US.Jason"
     riva_tts_sample_rate: int = 22_050
 
     @property

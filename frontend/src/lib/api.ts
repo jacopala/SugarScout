@@ -182,4 +182,5 @@ export interface VoiceTurn {
   flagged: string | null
   escalated: boolean
   audio: string | null
+  emotion: string
 }

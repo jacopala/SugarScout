@@ -11,7 +11,8 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from sugarscout.ai.speech import clean_for_speech, pcm_to_wav
+from sugarscout.ai.chat import split_tone
+from sugarscout.ai.speech import clean_for_speech, pcm_to_wav, voice_for
 from sugarscout.ai.summary import compute_stats
 from sugarscout.ai.wake import parse_wake
 from sugarscout.api.main import create_app
@@ -31,16 +32,18 @@ class FakeSpeech:
         self.fail_asr = fail_asr
         self.fail_tts = fail_tts
         self.spoken: list[str] = []
+        self.emotions: list[str] = []
 
     async def transcribe(self, pcm16k: bytes) -> str:
         if self.fail_asr:
             raise TimeoutError("asr down")
         return self.transcript
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, emotion: str = "neutral") -> bytes:
         if self.fail_tts:
             raise TimeoutError("tts down")
         self.spoken.append(text)
+        self.emotions.append(emotion)
         return pcm_to_wav(b"\x01\x00" * 100, 22_050)
 
 
@@ -77,7 +80,9 @@ async def api(
         app.router.lifespan_context(app),
         AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
     ):
-        app.state.llm = FakeModel(reply="Why did the cookie go to the doctor? It felt crummy! 🍪")
+        app.state.llm = FakeModel(
+            reply="[happy] Why did the cookie go to the doctor? It felt crummy! 🍪"
+        )
         yield c, app
     async with engine.begin() as conn:
         for table in ("chat_messages", "mood_checkins", "alerts"):
@@ -126,6 +131,8 @@ async def test_wake_word_with_request_replies_with_audio(api: tuple[AsyncClient,
     assert speech.spoken == ["Why did the cookie go to the doctor? It felt crummy!"], (
         "emoji not spoken"
     )
+    assert "[happy]" not in str(data["reply"]), "tone tag never shown"
+    assert data["emotion"] == "happy" and speech.emotions == ["happy"]
 
 
 async def test_wake_word_alone_acknowledges_and_stays_awake(
@@ -191,6 +198,7 @@ async def test_mood_checkin_saves_time_replies_and_reaches_scout(
     assert r.status_code == 200
     body = r.json()
     assert body["label"] == "not great" and body["reply"] == MOOD_REPLIES[2]
+    assert body["emotion"] == "sad"
     assert body["created_at"]
 
     listed = (await c.get("/checkins")).json()
@@ -204,3 +212,58 @@ async def test_mood_checkin_saves_time_replies_and_reaches_scout(
     stats = await compute_stats(engine, DEMO_CHILD_ID)
     assert stats["mood_checkins"] >= 1 and stats["latest_mood"] == 2
     assert stats["low_mood_checkins"] >= 1
+
+
+@pytest.mark.parametrize(
+    ("base", "emotion", "voice"),
+    [
+        ("Magpie-Multilingual.EN-US.Jason", "happy", "Magpie-Multilingual.EN-US.Jason.Happy"),
+        ("Magpie-Multilingual.EN-US.Jason", "calm", "Magpie-Multilingual.EN-US.Jason.Calm"),
+        ("Magpie-Multilingual.EN-US.Jason", "sad", "Magpie-Multilingual.EN-US.Jason.Calm"),
+        ("Magpie-Multilingual.EN-US.Mia", "sad", "Magpie-Multilingual.EN-US.Mia.Sad"),
+        ("Magpie-Multilingual.EN-US.Mia", "happy", "Magpie-Multilingual.EN-US.Mia.Neutral"),
+        ("Magpie-Multilingual.EN-US.Diego", "happy", "Magpie-Multilingual.EN-US.Diego"),
+    ],
+)
+def test_voice_for_picks_closest_available_emotion(base: str, emotion: str, voice: str) -> None:
+    assert voice_for(base, emotion) == voice
+
+
+@pytest.mark.parametrize(
+    ("raw", "tone", "text"),
+    [
+        ("[happy] Yay!", "happy", "Yay!"),
+        ("[Calm]  Let's tell a grown-up.", "calm", "Let's tell a grown-up."),
+        ("No tag here.", "neutral", "No tag here."),
+        ("[neutral] Hi [happy] there", "neutral", "Hi there"),
+    ],
+)
+def test_split_tone(raw: str, tone: str, text: str) -> None:
+    assert split_tone(raw) == (tone, text)
+
+
+async def test_happy_tone_becomes_calm_while_a_reminder_is_active(
+    api: tuple[AsyncClient, object], engine: AsyncEngine
+) -> None:
+    c, app = api
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """INSERT INTO alerts (child_id, rule_type, severity, message)
+                   VALUES (:c, 'urgent_low', 'urgent', 'low')"""
+            ),
+            {"c": DEMO_CHILD_ID},
+        )
+    speech = FakeSpeech("hey scout what should I do")
+    app.state.speech = speech  # type: ignore[attr-defined]
+    app.state.llm = FakeModel(reply="[happy] Let's have your fast sugar snack!")  # type: ignore[attr-defined]
+    data = await _turn(c)
+    assert data["emotion"] == "calm" and speech.emotions == ["calm"]
+
+
+async def test_emergency_reply_is_spoken_calmly(api: tuple[AsyncClient, object]) -> None:
+    c, app = api
+    speech = FakeSpeech("hey scout I can't breathe")
+    app.state.speech = speech  # type: ignore[attr-defined]
+    data = await _turn(c)
+    assert data["escalated"] and speech.emotions == ["calm"]

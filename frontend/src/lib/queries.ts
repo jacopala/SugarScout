@@ -91,7 +91,9 @@ export function useSendChat() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (message: string) =>
-      apiPost<{ reply: string; flagged: string | null; escalated: boolean }>('/chat', { message }),
+      apiPost<{ reply: string; flagged: string | null; escalated: boolean; emotion: string }>('/chat', {
+        message,
+      }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['chat', 'history'] })
       void qc.invalidateQueries({ queryKey: ['child', 'status'] })
@@ -156,7 +158,7 @@ export const useCheckins = (days = 7) =>
 export function useCreateCheckin() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (mood: number) => apiPost<Checkin & { reply: string }>('/checkins', { mood }),
+    mutationFn: (mood: number) => apiPost<Checkin & { reply: string; emotion: string }>('/checkins', { mood }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['checkins'] }),
   })
 }

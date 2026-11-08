@@ -19,3 +19,6 @@ backend/.env
 .DS_Store
 .idea/
 .vscode/
+
+# Local voice samples
+demo-audio/
