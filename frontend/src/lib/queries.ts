@@ -99,3 +99,39 @@ export function useSendChat() {
     },
   })
 }
+
+export interface SummaryItem {
+  text: string
+  stat_keys: string[]
+  confidence: 'high' | 'medium' | 'low'
+}
+
+export interface Summary {
+  id: number
+  created_at: string
+  model: string | null
+  status: 'ok' | 'rejected' | 'error' | 'disabled'
+  error: string | null
+  stats: Record<string, unknown>
+  content: {
+    headline: string
+    observations: SummaryItem[]
+    patterns: SummaryItem[]
+    wellbeing_notes: SummaryItem[]
+    discuss_with_care_team: string[]
+  } | null
+}
+
+export const useSummary = () =>
+  useQuery({
+    queryKey: ['summary'],
+    queryFn: () => apiGet<Summary | null>('/summary'),
+  })
+
+export function useGenerateSummary() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiPost<Summary>('/summary'),
+    onSuccess: (data) => qc.setQueryData(['summary'], data),
+  })
+}
