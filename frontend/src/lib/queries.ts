@@ -231,3 +231,35 @@ export const useForecast = () =>
 
 /** Demo time scale: one simulator reading (every 5 s) stands for one 5-minute CGM reading. */
 export const REAL_MS_PER_CGM_MIN = 1000
+
+// ---- Insulin log (record only) ---------------------------------------------------------
+
+export interface Dose {
+  id: number
+  given_at: string
+  units: string | null
+  kind: 'meal' | 'correction' | 'long_acting' | 'unknown'
+  source: 'parent' | 'child_report'
+  note: string | null
+}
+
+export const useDoses = () =>
+  useQuery({ queryKey: ['insulin'], queryFn: () => apiGet<Dose[]>('/insulin?days=1'), refetchInterval: 10_000 })
+
+export function useLogDose() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { kind: Dose['kind']; units?: number; given_at?: string; note?: string }) =>
+      apiPost<Dose>('/insulin', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['insulin'] })
+      void qc.invalidateQueries({ queryKey: ['agent'] })
+    },
+  })
+}
+
+export function useDemoEvent() {
+  return useMutation({
+    mutationFn: (kind: 'snack_no_insulin' | 'exercise') => apiPost('/demo/event', { kind }),
+  })
+}

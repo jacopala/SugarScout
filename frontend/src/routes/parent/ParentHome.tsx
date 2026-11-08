@@ -4,6 +4,7 @@ import { AccessGate } from '../../components/AccessGate'
 import { ApiStatus } from '../../components/ApiStatus'
 import { AlertsPanel, DemoControls, GlucoseHero } from '../../components/Dashboard'
 import { LiveChart, WeekChart } from '../../components/GlucoseCharts'
+import { InsulinCard } from '../../components/InsulinCard'
 import { MealsCard } from '../../components/MealsCard'
 import { MoodCard } from '../../components/MoodCard'
 import { PushToggle } from '../../components/PushToggle'
@@ -63,6 +64,7 @@ export function ParentHome() {
             <DemoControls />
             <AlertsPanel />
             <MealsCard />
+            <InsulinCard />
             <MoodCard />
           </aside>
         </div>

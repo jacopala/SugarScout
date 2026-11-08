@@ -18,6 +18,7 @@ router = APIRouter(prefix="/checkins", tags=["checkins"])
 class CheckinIn(BaseModel):
     mood: int = Field(ge=1, le=5)
     source: Literal["tap", "voice"] = "tap"
+    context: Literal["daily", "after_meal", "agent"] = "daily"
 
 
 class CheckinOut(BaseModel):
@@ -25,6 +26,7 @@ class CheckinOut(BaseModel):
     mood: int
     label: str
     source: str
+    context: str = "daily"
     created_at: datetime
 
 
@@ -35,7 +37,7 @@ class CheckinCreated(CheckinOut):
 
 @router.post("", response_model=CheckinCreated, dependencies=[DemoKey])
 async def create(body: CheckinIn, engine: EngineDep) -> CheckinCreated:
-    row = await mood.record(engine, DEMO_CHILD_ID, body.mood, body.source)
+    row = await mood.record(engine, DEMO_CHILD_ID, body.mood, body.source, body.context)
     return CheckinCreated.model_validate(
         {**row, "reply": mood.MOOD_REPLIES[body.mood], "emotion": mood.MOOD_EMOTIONS[body.mood]}
     )

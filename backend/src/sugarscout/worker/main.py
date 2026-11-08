@@ -27,6 +27,7 @@ from sugarscout.log import configure_logging, get_logger
 from sugarscout.notify.push import deliver_pending as deliver_pending_push
 from sugarscout.notify.sms import deliver
 from sugarscout.settings import get_settings
+from sugarscout.sim.cgm import add_effect
 from sugarscout.sim.tick import run_tick
 
 log = get_logger(__name__)
@@ -89,7 +90,20 @@ async def push_outbox(ctx: dict[str, Any]) -> int:
 
 
 async def analyze_meal(ctx: dict[str, Any], meal_id: int) -> str:
-    return await run_meal_analysis(ctx["engine"], ctx["settings"], ctx["llm"], meal_id)
+    status = await run_meal_analysis(ctx["engine"], ctx["settings"], ctx["llm"], meal_id)
+    if status == "ok":
+        # Demo simulator: the estimated carbs raise the fake CGM (see sim/cgm.py).
+        async with ctx["engine"].connect() as conn:
+            carbs = (
+                await conn.execute(
+                    text("SELECT (analysis->>'total_carbs_g')::float FROM meals WHERE id = :i"),
+                    {"i": meal_id},
+                )
+            ).scalar_one_or_none()
+        if carbs:
+            await add_effect(ctx["redis"], "meal", carbs)
+    await ctx["redis"].enqueue_job("agent_tick")
+    return status
 
 
 _TICK_SECONDS = set(range(0, 60, max(1, get_settings().sim_tick_seconds)))

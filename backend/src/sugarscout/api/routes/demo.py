@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+import json
+from typing import Literal
+
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep
+from sugarscout.api.deps import DemoKey, EngineDep, RedisDep, SettingsDep, enqueue
 from sugarscout.demo import CHILD_REMINDERS, DEMO_CHILD_ID, REMINDER_PRIORITY
-from sugarscout.sim.cgm import SCENARIO_LABELS, Scenario, load_state, set_scenario
+from sugarscout.sim.cgm import SCENARIO_LABELS, Scenario, add_effect, load_state, set_scenario
 
 router = APIRouter(tags=["demo"])
 
@@ -51,6 +54,51 @@ async def demo_state(settings: SettingsDep, redis: RedisDep) -> DemoState:
 async def choose_scenario(body: ScenarioIn, settings: SettingsDep, redis: RedisDep) -> DemoState:
     state = await set_scenario(redis, body.scenario)
     return _state(settings, state.scenario)
+
+
+class DemoEventIn(BaseModel):
+    kind: Literal["snack_no_insulin", "exercise"]
+
+
+@router.post("/demo/event", dependencies=[DemoKey])
+async def demo_event(
+    body: DemoEventIn, request: Request, engine: EngineDep, redis: RedisDep
+) -> dict[str, str]:
+    """Presenter shortcuts for the demo story. "Big snack, no insulin" logs a snack as if the
+    child tapped it (with a fixed estimate so the demo is repeatable); "Exercise drop"
+    nudges the fake CGM down."""
+    if body.kind == "exercise":
+        await add_effect(redis, "exercise")
+        return {"ok": "exercise"}
+    analysis = {
+        "items": [
+            {"name": "juice box", "carbs_g": 24, "sugar_g": 22, "contains_gluten": False},
+            {
+                "name": "chocolate chip cookies",
+                "carbs_g": 30,
+                "sugar_g": 16,
+                "contains_gluten": True,
+            },
+        ],
+        "confidence": "medium",
+        "note": "Most of the sugar is from the juice.",
+        "total_carbs_g": 54,
+        "total_sugar_g": 38,
+        "contains_gluten": True,
+    }
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """INSERT INTO meals (child_id, description, source, analysis_status, analysis,
+                                      model, analyzed_at)
+                   VALUES (:c, 'juice box and two cookies', 'tap', 'ok', CAST(:a AS jsonb),
+                           'demo preset', now())"""
+            ),
+            {"c": DEMO_CHILD_ID, "a": json.dumps(analysis)},
+        )
+    await add_effect(redis, "meal", 54)
+    await enqueue(request, "agent_tick")
+    return {"ok": "snack_no_insulin"}
 
 
 @router.post("/demo/check-key", dependencies=[DemoKey])

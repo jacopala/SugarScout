@@ -19,16 +19,22 @@ MOOD_LABELS: dict[int, str] = {
 
 
 async def record(
-    engine: AsyncEngine, child_id: uuid.UUID, mood: int, source: str = "tap"
+    engine: AsyncEngine,
+    child_id: uuid.UUID,
+    mood: int,
+    source: str = "tap",
+    context: str = "daily",
+    meal_id: int | None = None,
 ) -> dict[str, Any]:
     async with engine.begin() as conn:
         row = (
             await conn.execute(
                 text(
-                    """INSERT INTO mood_checkins (child_id, mood, source) VALUES (:c, :m, :s)
-                       RETURNING id, mood, source, created_at"""
+                    """INSERT INTO mood_checkins (child_id, mood, source, context, meal_id)
+                       VALUES (:c, :m, :s, :ctx, :meal)
+                       RETURNING id, mood, source, context, created_at"""
                 ),
-                {"c": child_id, "m": mood, "s": source},
+                {"c": child_id, "m": mood, "s": source, "ctx": context, "meal": meal_id},
             )
         ).one()
     return {**row._mapping, "label": MOOD_LABELS[row.mood]}
@@ -41,7 +47,7 @@ async def recent(
         rows = (
             await conn.execute(
                 text(
-                    """SELECT id, mood, source, created_at FROM mood_checkins
+                    """SELECT id, mood, source, context, created_at FROM mood_checkins
                        WHERE child_id = :c AND created_at >= now() - make_interval(days => :d)
                        ORDER BY created_at DESC LIMIT :n"""
                 ),

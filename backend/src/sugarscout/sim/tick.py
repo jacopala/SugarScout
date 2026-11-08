@@ -14,7 +14,7 @@ from sugarscout.alerts.service import AlertEvent, sync_alerts
 from sugarscout.rules.engine import Reading, RulesConfig, Symptom, evaluate
 from sugarscout.rules.forecast import Forecast, forecast
 from sugarscout.settings import Settings
-from sugarscout.sim.cgm import load_state, save_state, step, trend_label
+from sugarscout.sim.cgm import drain_effects, load_state, save_state, step, trend_label
 
 
 async def recent_readings(
@@ -139,6 +139,7 @@ async def run_tick(
 ) -> tuple[int | None, list[AlertEvent], list[int]]:
     now = now or datetime.now(UTC)
     state = await load_state(redis)
+    await drain_effects(redis, state)
     value = step(state, rng)
     if value is not None:
         async with engine.begin() as conn:

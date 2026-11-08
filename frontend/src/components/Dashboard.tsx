@@ -1,6 +1,14 @@
 import type { AlertOut, NotificationOut, Trend } from '../lib/api'
 import { AlertIcon, ArrowRightIcon, CheckIcon, PhoneIcon } from './Icons'
-import { useAckAlert, useAlerts, useDemoState, useForecast, useLatest, useSetScenario } from '../lib/queries'
+import {
+  useAckAlert,
+  useAlerts,
+  useDemoEvent,
+  useDemoState,
+  useForecast,
+  useLatest,
+  useSetScenario,
+} from '../lib/queries'
 import { BANDS } from '../lib/bands'
 
 // Arrow rotation per CGM trend (flat icon, rotated like a CGM's trend arrow).
@@ -174,6 +182,7 @@ export function AlertsPanel() {
 export function DemoControls() {
   const { data } = useDemoState()
   const setScenario = useSetScenario()
+  const event = useDemoEvent()
   if (!data) return null
   return (
     <section className="card demo-controls" aria-labelledby="demo-h">
@@ -195,7 +204,16 @@ export function DemoControls() {
           </button>
         ))}
       </div>
-      {setScenario.isError ? <p className="form-error">Couldn’t change the scenario.</p> : null}
+      <h3>Events</h3>
+      <div className="scenario-buttons">
+        <button className="btn" onClick={() => event.mutate('snack_no_insulin')} disabled={event.isPending}>
+          Big snack, no insulin
+        </button>
+        <button className="btn" onClick={() => event.mutate('exercise')} disabled={event.isPending}>
+          Exercise drop
+        </button>
+      </div>
+      {setScenario.isError || event.isError ? <p className="form-error">Couldn’t change the scenario.</p> : null}
     </section>
   )
 }
