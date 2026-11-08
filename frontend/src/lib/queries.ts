@@ -135,3 +135,28 @@ export function useGenerateSummary() {
     onSuccess: (data) => qc.setQueryData(['summary'], data),
   })
 }
+
+// ---- Mood check-ins -----------------------------------------------------------
+
+export interface Checkin {
+  id: number
+  mood: number
+  label: string
+  source: 'tap' | 'voice'
+  created_at: string
+}
+
+export const useCheckins = (days = 7) =>
+  useQuery({
+    queryKey: ['checkins', days],
+    queryFn: () => apiGet<Checkin[]>(`/checkins?days=${days}`),
+    refetchInterval: 10_000,
+  })
+
+export function useCreateCheckin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (mood: number) => apiPost<Checkin & { reply: string }>('/checkins', { mood }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['checkins'] }),
+  })
+}

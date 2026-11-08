@@ -73,6 +73,7 @@ function mockApi(overrides: Routes = {}) {
     '/api/child/status': { body: { first_name: 'Alex', reminder: null, reminder_rule: null } },
     '/api/chat/history': { body: [] },
     '/api/summary': { body: null },
+    '/api/checkins': { body: [] },
     ...overrides,
   }
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -106,7 +107,7 @@ describe('routing', () => {
   it('renders the child tree inside the child view scope only', async () => {
     mockApi()
     const { container } = renderAt('/child')
-    expect(await screen.findByRole('img', { name: 'Your companion' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /How are you feeling today\?/ })).toBeInTheDocument()
     expect(container.querySelector('[data-view="child"]')).not.toBeNull()
     expect(container.querySelector('[data-view="parent"]')).toBeNull()
   })
@@ -184,5 +185,44 @@ describe('ApiStatus', () => {
     render(withClient(<ApiStatus />))
     // ApiStatus retries once (1s backoff) before reporting the API as down.
     expect(await screen.findByText('API unreachable', {}, { timeout: 4000 })).toBeInTheDocument()
+  })
+})
+
+describe('mood check-in', () => {
+  it('saves the mood, then opens Scout showing its gentle reply', async () => {
+    const fetchSpy = mockApi({
+      'POST /api/checkins': {
+        body: {
+          id: 1,
+          mood: 2,
+          label: 'not great',
+          source: 'tap',
+          created_at: new Date().toISOString(),
+          reply: "I'm sorry you're feeling not great. Want to tell me about it?",
+        },
+      },
+      'POST /api/voice/speak': { body: { audio: null } },
+    })
+    renderAt('/child')
+    fireEvent.click(await screen.findByRole('button', { name: '2 out of 5: Not great' }))
+    expect(await screen.findByText("I'm sorry you're feeling not great. Want to tell me about it?")).toBeInTheDocument()
+    const post = fetchSpy.mock.calls.find(([url, init]) => String(url) === '/api/checkins' && init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ mood: 2 })
+    // jsdom has no microphone: the display falls back to typing.
+    expect(screen.getByLabelText('Message Scout')).toBeInTheDocument()
+  })
+
+  it('lists check-ins with their time on the parent dashboard', async () => {
+    const at = new Date()
+    at.setHours(15, 42, 0, 0)
+    mockApi({
+      '/api/checkins': {
+        body: [{ id: 3, mood: 1, label: 'really bad', source: 'tap', created_at: at.toISOString() }],
+      },
+    })
+    renderAt('/parent')
+    expect(await screen.findByText('Really bad')).toBeInTheDocument()
+    expect(screen.getByText(/Today 3:42/)).toBeInTheDocument()
+    expect(screen.getByText(/Today: 1 check-in, average 1\.0 of 5/)).toBeInTheDocument()
   })
 })

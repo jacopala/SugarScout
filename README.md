@@ -13,20 +13,21 @@ The full design is in *Pediatric Health Companion: Design Document and Implement
 | Glucose data | **Fake CGM** in the worker: one reading every 5 s with real timestamps, sped-up dynamics, and presenter-controlled scenarios |
 | Rules and alerts | Real: deterministic rules on raw readings, dedupe, auto-resolve, an audit trail ("Why did this fire?") |
 | SMS | Real via a Twilio trial account (it only texts verified numbers). Without keys it runs as a dry run, logged and never sent |
-| Companion chat | Real: Nemotron Nano via the NVIDIA API catalog, with a deterministic emergency bypass and an output filter |
+| Scout (child) | Voice-first display: say "Hey Scout", then talk. Speech recognition is **Riva Parakeet** and Scout's voice is **Magpie TTS**, both on NVIDIA's cloud. Replies come from Nemotron 3.5 Lightning, with a deterministic emergency bypass and an output filter. Typing is the fallback |
+| Mood check-in | The child's landing page asks "How are you feeling today?" (1–5). Each answer is saved with its time and shown to the parent. Scout replies with a fixed gentle line, and moods never trigger alerts |
 | Parent summary | Real: Nemotron Super words stats that were computed in code. The output is validated and rejected if unsafe |
 | Sign-in | Replaced by one `DEMO_ACCESS_CODE` |
 
 ### Demo script (about 4 minutes)
 
-Open `/parent` on the laptop and `/child` on a phone or second window.
+Open `/parent` on the laptop and `/child` in **Chrome** on a second screen. Allow the microphone, and use headphones or a quiet room.
 
 1. **Steady.** Point out the live line, the 7-day chart, and that there are no alerts.
-2. **Chat.** On the child view, tap "I feel fine" and "Tell me a joke". Scout answers briefly and kindly.
+2. **Check-in and voice.** On the child view, tap a mood (it appears on the parent's Mood card with the time). Scout says a gentle line. Tap **Start listening**, then say *"Hey Scout, tell me a joke."* Scout answers out loud, with captions.
 3. **Rapid drop.** Click **Rapid drop** under Demo controls. Within about 30 s, an **urgent low** alert opens and your phone gets a text. The child view shows a calm reminder from the care plan, with no numbers.
 4. **Acknowledge, then Recover.** The alerts auto-resolve and an all-clear text arrives. Open "Why did this fire?" to show the exact readings and thresholds behind the alert.
 5. **Sensor dropout.** About 30 s later a **data gap** alert fires. Silence is never treated as "fine". Then click **Recover**.
-6. **Emergency language.** On the child view, type "I feel really dizzy and shaky". The model is bypassed: a scripted reply appears, an urgent alert opens, and the parent gets a text.
+6. **Emergency language.** Say *"Hey Scout, I feel really dizzy and shaky."* The model is bypassed: Scout speaks a scripted reply, an urgent alert opens, and the parent gets a text.
 7. **Weekly summary.** Click **Generate summary**. Nemotron Super writes it from stats computed in code. Each claim links to the number it's based on, and the card is labelled AI-generated.
 
 Pitch line: *the AI talks; fixed rules decide.*

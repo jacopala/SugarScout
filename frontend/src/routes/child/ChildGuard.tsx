@@ -1,5 +1,7 @@
 import { Outlet } from 'react-router'
 
+import { AccessGate } from '../../components/AccessGate'
+
 /**
  * Access guard for the child route tree.
  * Phase 2: require a restricted device token from pairing. Without one, redirect
@@ -8,7 +10,9 @@ import { Outlet } from 'react-router'
 export function ChildGuard() {
   return (
     <div data-view="child">
-      <Outlet />
+      <AccessGate>
+        <Outlet />
+      </AccessGate>
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import type { RouteObject } from 'react-router'
 
 import { ChildGuard } from './routes/child/ChildGuard'
-import { ChildHome } from './routes/child/ChildHome'
+import { MoodCheck } from './routes/child/MoodCheck'
+import { ScoutDisplay } from './routes/child/ScoutDisplay'
 import { Home } from './routes/Home'
 import { NotFound, RouteError } from './routes/NotFound'
 import { ParentGuard } from './routes/parent/ParentGuard'
@@ -17,7 +18,10 @@ export const routes: RouteObject[] = [
     path: '/child',
     element: <ChildGuard />,
     errorElement: <RouteError />,
-    children: [{ index: true, element: <ChildHome /> }],
+    children: [
+      { index: true, element: <MoodCheck /> },
+      { path: 'scout', element: <ScoutDisplay /> },
+    ],
   },
   {
     path: '/parent',

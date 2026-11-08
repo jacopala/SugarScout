@@ -155,3 +155,31 @@ export interface ChildStatus {
   reminder: string | null
   reminder_rule: string | null
 }
+
+/** POST raw audio (a WAV clip) with the demo key. */
+export async function apiPostAudio<T>(path: string, wav: ArrayBuffer): Promise<T> {
+  const key = getDemoKey()
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'audio/wav',
+      ...(key ? { 'X-Demo-Key': key } : {}),
+    },
+    body: wav,
+  })
+  const data: unknown = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, data)
+  return data as T
+}
+
+export interface VoiceTurn {
+  heard: boolean
+  woke: boolean
+  awake_for_s: number
+  transcript: string | null
+  reply: string | null
+  flagged: string | null
+  escalated: boolean
+  audio: string | null
+}

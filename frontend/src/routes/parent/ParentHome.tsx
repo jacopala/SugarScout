@@ -4,6 +4,7 @@ import { AccessGate } from '../../components/AccessGate'
 import { ApiStatus } from '../../components/ApiStatus'
 import { AlertsPanel, DemoControls, GlucoseHero } from '../../components/Dashboard'
 import { LiveChart, WeekChart } from '../../components/GlucoseCharts'
+import { MoodCard } from '../../components/MoodCard'
 import { SummaryCard } from '../../components/SummaryCard'
 import { useDemoState, useLive, useWeek } from '../../lib/queries'
 
@@ -50,6 +51,7 @@ export function ParentHome() {
           <aside className="dash-side">
             <DemoControls />
             <AlertsPanel />
+            <MoodCard />
           </aside>
         </div>
       </div>

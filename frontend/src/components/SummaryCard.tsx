@@ -15,6 +15,10 @@ const STAT_LABELS: Record<string, [string, (v: unknown) => string]> = {
   readings_count: ['Readings', (v) => Number(v).toLocaleString()],
   child_chat_messages: ['Messages to Scout', (v) => String(v)],
   companion_safety_escalations: ['Chat escalations', (v) => String(v)],
+  mood_checkins: ['Mood check-ins', (v) => String(v)],
+  mood_avg: ['Average mood', (v) => (v === null ? '—' : `${String(v)} of 5`)],
+  low_mood_checkins: ['Low-mood check-ins (1–2)', (v) => String(v)],
+  latest_mood: ['Latest mood', (v) => (v === null ? '—' : `${String(v)} of 5`)],
 }
 
 function statText(stats: Record<string, unknown>, key: string): string {
