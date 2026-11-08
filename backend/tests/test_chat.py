@@ -185,3 +185,15 @@ async def test_chat_endpoint_requires_access_code_when_set(
         await conn.execute(
             text("DELETE FROM chat_messages WHERE child_id = :c"), {"c": DEMO_CHILD_ID}
         )
+
+
+async def test_flagged_turns_never_reach_the_model(
+    engine: AsyncEngine, redis: Redis, settings: Settings, child: uuid.UUID
+) -> None:
+    await handle_message(engine, redis, settings, None, child, "Alex", "hi")  # AI-off fallback
+    await handle_message(engine, redis, settings, FakeModel(), child, "Alex", "I feel really dizzy")
+    model = FakeModel()
+    await handle_message(engine, redis, settings, model, child, "Alex", "tell me a joke")
+    sent = " ".join(m["content"] for m in model.calls[-1][1:])
+    assert "dizzy" not in sent, "emergency text must never reach the model, even as history"
+    assert AI_OFF_REPLY not in sent, "fallback lines must not be fed back to be imitated"

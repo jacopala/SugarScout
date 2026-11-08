@@ -74,13 +74,19 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_from: str = ""
     parent_phone: str = ""
+    # Twilio TRIAL accounts may only send predefined templates (error 572006 otherwise).
+    # Set e.g. "sms_account_alerts" on a trial; leave empty once the account is upgraded.
+    twilio_trial_template: str = ""
 
     # NVIDIA API catalog (OpenAI-compatible).
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
-    nemotron_chat_model: str = "nvidia/nemotron-nano-3-30b-a3b"
-    nemotron_analysis_model: str = "nvidia/nemotron-3-super-120b-a12b"
+    nemotron_chat_model: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    nemotron_analysis_model: str = "nvidia/nemotron-3.5-super-vl-120b-a12b"
     llm_timeout_s: float = 20.0
+    # Nemotron 3.5 models reason by default; off keeps chat replies fast and the token
+    # budget for the answer (sent as chat_template_kwargs.enable_thinking).
+    llm_enable_thinking: bool = False
 
     @property
     def twilio_configured(self) -> bool:

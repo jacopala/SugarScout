@@ -40,7 +40,9 @@ async def deliver(engine: AsyncEngine, settings: Settings, notification_id: int)
                     data={
                         "To": settings.parent_phone,
                         "From": settings.twilio_from,
-                        "Body": row.body,
+                        # Trial accounts can't send custom text; the dashboard still
+                        # shows SugarScout's own wording from notifications.body.
+                        "Body": settings.twilio_trial_template or row.body,
                     },
                 )
             if resp.status_code in (200, 201):
@@ -61,6 +63,11 @@ async def deliver(engine: AsyncEngine, settings: Settings, notification_id: int)
             {"s": status, "sid": sid, "e": error, "id": notification_id},
         )
     log.info(
-        "sms.delivered", notification_id=notification_id, status=status, error=error, body=row.body
+        "sms.delivered",
+        trial_template=settings.twilio_trial_template or None,
+        notification_id=notification_id,
+        status=status,
+        error=error,
+        body=row.body,
     )
     return status

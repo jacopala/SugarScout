@@ -103,7 +103,10 @@ async def _context(
         history = (
             await conn.execute(
                 text(
-                    """SELECT role, content FROM chat_messages WHERE child_id = :c
+                    # Flagged turns never go back to the model: emergency messages must
+                    # bypass it entirely, and fallback/filtered lines would be imitated.
+                    """SELECT role, content FROM chat_messages
+                       WHERE child_id = :c AND flagged IS NULL
                        ORDER BY created_at DESC, id DESC LIMIT :n"""
                 ),
                 {"c": child_id, "n": HISTORY_TURNS},

@@ -21,9 +21,9 @@ envVarGroups:
       - key: DEMO_CHILD_NAME
         value: Alex
       - key: NEMOTRON_CHAT_MODEL
-        value: nvidia/nemotron-nano-3-30b-a3b
+        value: nvidia/nemotron-3.5-lightning-30b-a3b
       - key: NEMOTRON_ANALYSIS_MODEL
-        value: nvidia/nemotron-3-super-120b-a12b
+        value: nvidia/nemotron-3.5-super-vl-120b-a12b
 
 services:
   - type: web
@@ -80,6 +80,8 @@ services:
         sync: false # your Twilio trial number, +1XXXXXXXXXX
       - key: PARENT_PHONE
         sync: false # your verified phone, +1XXXXXXXXXX
+      - key: TWILIO_TRIAL_TEMPLATE
+        value: sms_account_alerts # trial accounts can't send custom text; clear after upgrading
       - key: REDIS_URL
         fromService:
           type: keyvalue

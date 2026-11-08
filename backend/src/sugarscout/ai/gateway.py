@@ -41,6 +41,7 @@ class NvidiaGateway:
             timeout=settings.llm_timeout_s,
             max_retries=1,
         )
+        self._enable_thinking = settings.llm_enable_thinking
 
     async def complete(
         self,
@@ -51,7 +52,9 @@ class NvidiaGateway:
         temperature: float,
         json_mode: bool = False,
     ) -> str:
-        kwargs: dict[str, object] = {}
+        kwargs: dict[str, object] = {
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": self._enable_thinking}}
+        }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
         # Typed as Any: the SDK's overloads only know OpenAI's own model names.
@@ -64,6 +67,8 @@ class NvidiaGateway:
             **kwargs,
         )
         content = resp.choices[0].message.content or ""
+        if not content.strip():
+            raise RuntimeError(f"{model} returned no content (reasoning may have used the budget)")
         # Reasoning models may inline their thinking; the child must never see it.
         return _THINK.sub("", content).strip()
 
