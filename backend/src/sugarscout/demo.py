@@ -31,12 +31,21 @@ CHILD_REMINDERS: dict[str, str] = {
     "high": "Your number is running high. Please let a grown-up know so you can check your "
     "plan together.",
     "data_gap": "I can't see your sensor right now. Can you ask a grown-up to take a look?",
+    "help_request": "I told your grown-up you need help. Stay where you are; they're coming.",
     "emergency_language": "I've let your grown-up know. Stay where you are, and if someone "
     "is nearby, tell them how you feel right now.",
 }
 
 # Reminder priority when several alerts are open at once.
-REMINDER_PRIORITY = ["emergency_language", "urgent_low", "low", "rapid_drop", "data_gap", "high"]
+REMINDER_PRIORITY = [
+    "help_request",
+    "emergency_language",
+    "urgent_low",
+    "low",
+    "rapid_drop",
+    "data_gap",
+    "high",
+]
 
 
 async def ensure_demo_child(engine: AsyncEngine, settings: Settings) -> None:

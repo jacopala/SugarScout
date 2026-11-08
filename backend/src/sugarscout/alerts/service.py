@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from sugarscout.rules.engine import Evaluation, RuleHit
 from sugarscout.settings import Settings
 
-SMS_ON_OPEN = frozenset({"urgent_low", "data_gap", "emergency_language"})
+SMS_ON_OPEN = frozenset({"urgent_low", "data_gap", "emergency_language", "help_request"})
 
 RULE_LABELS: dict[str, str] = {
     "urgent_low": "urgent low",
@@ -31,6 +31,7 @@ RULE_LABELS: dict[str, str] = {
     "rapid_drop": "rapid drop",
     "data_gap": "sensor data gap",
     "emergency_language": "companion safety",
+    "help_request": "help request",
 }
 
 
@@ -43,6 +44,10 @@ def sms_body(rule_type: str, kind: str, name: str) -> str:
     if rule_type == "data_gap":
         return (
             f"SugarScout: {name}'s glucose sensor stopped sending data. Please check the dashboard."
+        )
+    if rule_type == "help_request":
+        return (
+            f"SugarScout: {name} pressed the Help button and needs you. Please check on {name} now."
         )
     if rule_type == "emergency_language":
         return (
@@ -205,7 +210,7 @@ async def raise_alert(
 
 
 # Alerts no reading can clear: a parent acknowledgement closes them.
-ACK_RESOLVES = frozenset({"emergency_language"})
+ACK_RESOLVES = frozenset({"emergency_language", "help_request"})
 
 
 async def acknowledge(conn: AsyncConnection, alert_id: int) -> dict[str, Any] | None:

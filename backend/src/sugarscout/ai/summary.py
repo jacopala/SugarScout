@@ -105,6 +105,20 @@ async def compute_stats(
             )
         ).one()
 
+        meals = (
+            await conn.execute(
+                text(
+                    """SELECT count(*) AS n,
+                              count(*) FILTER (WHERE analysis_status = 'ok') AS est,
+                              round(sum((analysis->>'total_sugar_g')::numeric), 0) AS sugar,
+                              count(*) FILTER (WHERE (analysis->>'contains_gluten')::boolean) AS gluten
+                       FROM meals
+                       WHERE child_id = :c AND created_at >= now() - make_interval(days => :d)"""
+                ),
+                {"c": child_id, "d": days},
+            )
+        ).one()
+
     n = int(totals.n or 0)
 
     def pct(x: Any) -> float:
@@ -142,6 +156,10 @@ async def compute_stats(
         "mood_avg": float(moods.avg) if moods.avg is not None else None,
         "low_mood_checkins": int(moods.low or 0),
         "latest_mood": int(moods.latest) if moods.latest is not None else None,
+        "meals_logged": int(meals.n or 0),
+        "meals_estimated": int(meals.est or 0),
+        "est_sugar_g_from_meals": int(meals.sugar) if meals.sugar is not None else None,
+        "meals_with_gluten": int(meals.gluten or 0),
         "mood_scale": "1 sad, 2 disappointed, 3 normal, 4 peaceful, 5 happy",
         "range_definitions": {
             "target": "70-180",

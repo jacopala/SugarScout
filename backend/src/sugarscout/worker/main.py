@@ -19,6 +19,8 @@ from arq import cron
 from arq.connections import RedisSettings
 from sqlalchemy import text
 
+from sugarscout.ai.gateway import get_gateway
+from sugarscout.ai.meals import analyze_meal as run_meal_analysis
 from sugarscout.db import create_engine
 from sugarscout.demo import DEMO_CHILD_ID, ensure_demo_child, ensure_history
 from sugarscout.log import configure_logging, get_logger
@@ -37,6 +39,7 @@ async def startup(ctx: dict[str, Any]) -> None:
     ctx["settings"] = settings
     ctx["engine"] = create_engine(settings)
     ctx["rng"] = random.Random()
+    ctx["llm"] = get_gateway(settings)
     await ensure_demo_child(ctx["engine"], settings)
     await ensure_history(ctx["engine"], settings)
     log.info("worker.startup", sim_enabled=settings.sim_enabled, tick_s=settings.sim_tick_seconds)
@@ -78,6 +81,10 @@ async def send_sms(ctx: dict[str, Any], notification_id: int) -> str:
     return await deliver(ctx["engine"], ctx["settings"], notification_id)
 
 
+async def analyze_meal(ctx: dict[str, Any], meal_id: int) -> str:
+    return await run_meal_analysis(ctx["engine"], ctx["settings"], ctx["llm"], meal_id)
+
+
 _TICK_SECONDS = set(range(0, 60, max(1, get_settings().sim_tick_seconds)))
 
 
@@ -85,7 +92,7 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(str(get_settings().redis_url))
     on_startup = startup
     on_shutdown = shutdown
-    functions: ClassVar[list[Any]] = [send_sms]
+    functions: ClassVar[list[Any]] = [send_sms, analyze_meal]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heartbeat, second=0, run_at_startup=True, timeout=30, unique=True),  # every minute
         cron(cgm_tick, second=_TICK_SECONDS, timeout=10, unique=True, keep_result=0),

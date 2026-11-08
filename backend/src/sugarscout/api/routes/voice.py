@@ -117,6 +117,30 @@ async def turn(
     )
 
 
+class TranscriptOut(BaseModel):
+    transcript: str
+
+
+@router.post("/transcribe", response_model=TranscriptOut, dependencies=[DemoKey])
+async def transcribe(request: Request) -> TranscriptOut:
+    """Plain dictation (no wake phrase, nothing stored), e.g. for "What did you eat?"."""
+    speech = request.app.state.speech
+    if speech is None:
+        raise HTTPException(503, "Voice is unavailable")
+    body = await request.body()
+    if len(body) > MAX_CLIP_BYTES:
+        raise HTTPException(413, "Clip too long")
+    try:
+        pcm = wav_to_pcm16k(body)
+    except Exception as exc:
+        raise HTTPException(400, f"Bad audio: {exc}") from exc
+    try:
+        return TranscriptOut(transcript=(await speech.transcribe(pcm)).strip())
+    except Exception as exc:
+        log.warning("voice.asr_failed", error=repr(exc))
+        raise HTTPException(502, "Speech recognition failed") from exc
+
+
 @router.post("/speak", response_model=SpeakOut, dependencies=[DemoKey])
 async def speak_text(
     body: SpeakIn, request: Request, redis: RedisDep, settings: SettingsDep

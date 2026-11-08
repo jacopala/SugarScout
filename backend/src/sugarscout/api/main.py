@@ -16,6 +16,7 @@ from sugarscout.ai.gateway import get_gateway
 from sugarscout.ai.speech import get_speech
 from sugarscout.api.routes import (
     alerts,
+    care,
     chat,
     checkins,
     demo,
@@ -101,6 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(summary.router)
     app.include_router(checkins.router)
     app.include_router(voice.router)
+    app.include_router(care.router)
     return app
 
 
