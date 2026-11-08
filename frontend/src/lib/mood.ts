@@ -1,10 +1,11 @@
-/** The 1-5 mood scale shared by the child's check-in and the parent's history. */
+/** The 1-5 mood scale shared by the child's check-in and the parent's history.
+ *  Names and characters follow the team's mood art (components/MoodFace.tsx). */
 export const MOODS = [
-  { value: 1, face: '😢', label: 'Really bad' },
-  { value: 2, face: '🙁', label: 'Not great' },
-  { value: 3, face: '😐', label: 'Okay' },
-  { value: 4, face: '🙂', label: 'Good' },
-  { value: 5, face: '😄', label: 'Great' },
+  { value: 1, label: 'Sad' },
+  { value: 2, label: 'Disappointed' },
+  { value: 3, label: 'Normal' },
+  { value: 4, label: 'Peaceful' },
+  { value: 5, label: 'Happy' },
 ] as const
 
 export function moodInfo(value: number) {

@@ -197,7 +197,7 @@ async def test_mood_checkin_saves_time_replies_and_reaches_scout(
     r = await c.post("/checkins", json={"mood": 2})
     assert r.status_code == 200
     body = r.json()
-    assert body["label"] == "not great" and body["reply"] == MOOD_REPLIES[2]
+    assert body["label"] == "disappointed" and body["reply"] == MOOD_REPLIES[2]
     assert body["emotion"] == "sad"
     assert body["created_at"]
 
@@ -207,7 +207,7 @@ async def test_mood_checkin_saves_time_replies_and_reaches_scout(
     model = FakeModel()
     app.state.llm = model  # type: ignore[attr-defined]
     await c.post("/chat", json={"message": "hi"})
-    assert "2 out of 5 (not great), just now" in model.calls[-1][0]["content"]
+    assert "2 out of 5 (disappointed), just now" in model.calls[-1][0]["content"]
 
     stats = await compute_stats(engine, DEMO_CHILD_ID)
     assert stats["mood_checkins"] >= 1 and stats["latest_mood"] == 2

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router'
 
+import { MoodFace } from '../../components/MoodFace'
 import { MOODS } from '../../lib/mood'
 import { useChildStatus, useCreateCheckin } from '../../lib/queries'
 
@@ -22,7 +23,7 @@ export function MoodCheck() {
       <h1 className="mood-question">
         {name ? `Hi ${name}! ` : ''}How are you feeling today?
       </h1>
-      <div className="mood-scale" role="group" aria-label="How are you feeling, from 1 really bad to 5 great">
+      <div className="mood-scale" role="group" aria-label="How are you feeling, from 1 sad to 5 happy">
         {MOODS.map((m) => (
           <button
             key={m.value}
@@ -33,7 +34,7 @@ export function MoodCheck() {
             aria-label={`${m.value} out of 5: ${m.label}`}
           >
             <span className="mood-face" aria-hidden="true">
-              {m.face}
+              <MoodFace mood={m.value} size={88} />
             </span>
             <span className="mood-num" aria-hidden="true">
               {m.value}

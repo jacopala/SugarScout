@@ -195,17 +195,17 @@ describe('mood check-in', () => {
         body: {
           id: 1,
           mood: 2,
-          label: 'not great',
+          label: 'disappointed',
           source: 'tap',
           created_at: new Date().toISOString(),
-          reply: "I'm sorry you're feeling not great. Want to tell me about it?",
+          reply: 'Aw, feeling disappointed is hard. Want to tell me what happened?',
         },
       },
       'POST /api/voice/speak': { body: { audio: null } },
     })
     renderAt('/child')
-    fireEvent.click(await screen.findByRole('button', { name: '2 out of 5: Not great' }))
-    expect(await screen.findByText("I'm sorry you're feeling not great. Want to tell me about it?")).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: '2 out of 5: Disappointed' }))
+    expect(await screen.findByText('Aw, feeling disappointed is hard. Want to tell me what happened?')).toBeInTheDocument()
     const post = fetchSpy.mock.calls.find(([url, init]) => String(url) === '/api/checkins' && init?.method === 'POST')
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ mood: 2 })
     // jsdom has no microphone: the display falls back to typing.
@@ -217,11 +217,11 @@ describe('mood check-in', () => {
     at.setHours(15, 42, 0, 0)
     mockApi({
       '/api/checkins': {
-        body: [{ id: 3, mood: 1, label: 'really bad', source: 'tap', created_at: at.toISOString() }],
+        body: [{ id: 3, mood: 1, label: 'sad', source: 'tap', created_at: at.toISOString() }],
       },
     })
     renderAt('/parent')
-    expect(await screen.findByText('Really bad')).toBeInTheDocument()
+    expect(await screen.findByText('Sad')).toBeInTheDocument()
     expect(screen.getByText(/Today 3:42/)).toBeInTheDocument()
     expect(screen.getByText(/Today: 1 check-in, average 1\.0 of 5/)).toBeInTheDocument()
   })

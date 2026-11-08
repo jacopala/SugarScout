@@ -142,7 +142,7 @@ async def compute_stats(
         "mood_avg": float(moods.avg) if moods.avg is not None else None,
         "low_mood_checkins": int(moods.low or 0),
         "latest_mood": int(moods.latest) if moods.latest is not None else None,
-        "mood_scale": "1 really bad, 2 not great, 3 okay, 4 good, 5 great",
+        "mood_scale": "1 sad, 2 disappointed, 3 normal, 4 peaceful, 5 happy",
         "range_definitions": {
             "target": "70-180",
             "low": "54-69",

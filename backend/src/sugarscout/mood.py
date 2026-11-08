@@ -10,11 +10,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 MOOD_LABELS: dict[int, str] = {
-    1: "really bad",
-    2: "not great",
-    3: "okay",
-    4: "good",
-    5: "great",
+    1: "sad",
+    2: "disappointed",
+    3: "normal",
+    4: "peaceful",
+    5: "happy",
 }
 
 
@@ -69,12 +69,12 @@ async def latest_within(
 
 # Scout's spoken reaction to each mood: fixed, gentle lines (no model involved).
 MOOD_REPLIES: dict[int, str] = {
-    1: "I'm sorry you're feeling really bad. I'm here with you. Want to tell me about it? "
+    1: "I'm sorry you're feeling sad. I'm here with you. Want to tell me about it? "
     "You can always tell a grown-up too.",
-    2: "I'm sorry you're feeling not great. Want to tell me about it?",
-    3: "Thanks for telling me. Okay days are okay! Want to chat for a bit?",
-    4: "Yay, I'm glad you're feeling good! What's been fun today?",
-    5: "Woohoo! I'm so happy you feel great! What made today awesome?",
+    2: "Aw, feeling disappointed is hard. Want to tell me what happened?",
+    3: "Thanks for telling me! A normal day is a good day. Want to chat for a bit?",
+    4: "Feeling peaceful sounds so nice. What's been calm and cozy today?",
+    5: "Yay! I'm so happy you're happy! What made today awesome?",
 }
 
 

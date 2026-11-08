@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 
+import { MoodFace } from '../../components/MoodFace'
 import type { VoiceTurn } from '../../lib/api'
 import { useChildStatus, useSendChat } from '../../lib/queries'
 import { useScoutVoice, type VoiceState } from '../../lib/voice/useScoutVoice'
@@ -154,8 +155,8 @@ export function ScoutDisplay() {
             ⌨️ {typing ? 'Hide keyboard' : 'Type instead'}
           </button>
         ) : null}
-        <Link className="btn" to="/child">
-          😊 How I feel
+        <Link className="btn btn-with-face" to="/child">
+          <MoodFace mood={5} size={26} /> How I feel
         </Link>
       </nav>
     </main>

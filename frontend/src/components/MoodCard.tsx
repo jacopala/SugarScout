@@ -1,4 +1,5 @@
 import { moodInfo } from '../lib/mood'
+import { MoodFace } from './MoodFace'
 import { useCheckins } from '../lib/queries'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
@@ -37,7 +38,7 @@ export function MoodCard() {
             return (
               <li key={c.id} className="mood-row" data-low={c.mood <= 2 || undefined}>
                 <span className="mood-row-face" aria-hidden="true">
-                  {m.face}
+                  <MoodFace mood={c.mood} size={36} />
                 </span>
                 <span className="mood-row-label">
                   <strong>{c.mood}/5</strong> {m.label}
