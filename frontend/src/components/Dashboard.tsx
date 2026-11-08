@@ -1,6 +1,6 @@
 import type { AlertOut, NotificationOut, Trend } from '../lib/api'
 import { AlertIcon, ArrowRightIcon, CheckIcon, PhoneIcon } from './Icons'
-import { useAckAlert, useAlerts, useDemoState, useLatest, useSetScenario } from '../lib/queries'
+import { useAckAlert, useAlerts, useDemoState, useForecast, useLatest, useSetScenario } from '../lib/queries'
 import { BANDS } from '../lib/bands'
 
 // Arrow rotation per CGM trend (flat icon, rotated like a CGM's trend arrow).
@@ -29,6 +29,7 @@ function zone(value: number): { label: string; tone: 'ok' | 'warn' | 'bad' } {
 
 export function GlucoseHero() {
   const { data } = useLatest()
+  const { data: fc } = useForecast()
   if (!data) return <div className="hero card">Loading…</div>
   if (data.value === null || data.stale) {
     return (
@@ -65,6 +66,13 @@ export function GlucoseHero() {
         </span>{' '}
         {TREND_LABEL[trend]} · updated {Math.round(data.age_s ?? 0)}s ago
       </p>
+      {fc?.predicted != null && fc.slope_per_5min != null && Math.abs(fc.slope_per_5min) >= 2 ? (
+        <p className="hero-meta">
+          <span className="status-chip" data-tone={fc.predicted < BANDS.low || fc.predicted > BANDS.veryHigh ? 'warn' : 'ok'}>
+            Heading to ~{fc.predicted} in ~{fc.horizon_min} min
+          </span>
+        </p>
+      ) : null}
     </div>
   )
 }

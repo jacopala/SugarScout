@@ -103,3 +103,47 @@ async def week(engine: EngineDep, days: int = Query(7, ge=1, le=30)) -> list[Hou
         )
         for r in rows
     ]
+
+
+class ForecastOut(BaseModel):
+    made_at: datetime | None
+    predicted: int | None
+    horizon_min: int | None
+    slope_per_5min: float | None
+    mae_24h: float | None  # mean absolute error of scored forecasts, mg/dL
+    scored_24h: int
+
+
+@router.get("/forecast", response_model=ForecastOut)
+async def latest_forecast(engine: EngineDep, settings: SettingsDep) -> ForecastOut:
+    """The latest ~20-minute forecast and how accurate recent forecasts have been."""
+    async with engine.connect() as conn:
+        latest_row = (
+            await conn.execute(
+                text(
+                    """SELECT made_at, predicted, horizon_min, slope_per_5min FROM forecasts
+                       WHERE child_id = :c AND made_at > now() - make_interval(secs => :fresh)
+                       ORDER BY made_at DESC LIMIT 1"""
+                ),
+                {"c": DEMO_CHILD_ID, "fresh": settings.sim_tick_seconds * 3},
+            )
+        ).first()
+        acc = (
+            await conn.execute(
+                text(
+                    """SELECT round(avg(abs(error))::numeric, 1) AS mae, count(*) AS n
+                       FROM forecasts
+                       WHERE child_id = :c AND error IS NOT NULL
+                         AND made_at > now() - INTERVAL '24 hours'"""
+                ),
+                {"c": DEMO_CHILD_ID},
+            )
+        ).one()
+    return ForecastOut(
+        made_at=latest_row.made_at if latest_row else None,
+        predicted=latest_row.predicted if latest_row else None,
+        horizon_min=latest_row.horizon_min if latest_row else None,
+        slope_per_5min=float(latest_row.slope_per_5min) if latest_row else None,
+        mae_24h=float(acc.mae) if acc.mae is not None else None,
+        scored_24h=int(acc.n),
+    )

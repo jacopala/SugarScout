@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 
 import type { HourPoint, LivePoint } from '../lib/api'
+import { REAL_MS_PER_CGM_MIN, type ForecastInfo } from '../lib/queries'
 import { BANDS } from '../lib/bands'
 
 const Y_DOMAIN: [number, number] = [40, 320]
@@ -65,8 +66,17 @@ function TooltipBox({ title, rows }: { title: string; rows: [string, string][] }
   )
 }
 
-export function LiveChart({ points }: { points: LivePoint[] }) {
-  const data = points.map((p) => ({ t: new Date(p.ts).getTime(), value: p.value }))
+export function LiveChart({ points, forecast }: { points: LivePoint[]; forecast?: ForecastInfo | null }) {
+  const data: { t: number; value?: number; proj?: number }[] = points.map((p) => ({
+    t: new Date(p.ts).getTime(),
+    value: p.value,
+  }))
+  const last = data[data.length - 1]
+  if (last && forecast?.predicted != null && forecast.horizon_min != null && last.value !== undefined) {
+    // Dashed projection from the latest reading to the ~20-minute forecast.
+    last.proj = last.value
+    data.push({ t: last.t + forecast.horizon_min * REAL_MS_PER_CGM_MIN, proj: forecast.predicted })
+  }
   return (
     <div className="chart" role="img" aria-label="Glucose readings over the last 10 minutes">
       <ResponsiveContainer width="100%" height={260}>
@@ -86,8 +96,11 @@ export function LiveChart({ points }: { points: LivePoint[] }) {
           <Tooltip
             cursor={{ stroke: 'var(--text-muted)', strokeDasharray: '3 3' }}
             content={({ active, payload }) => {
-              const p = payload?.[0]?.payload as { t: number; value: number } | undefined
+              const p = payload?.[0]?.payload as { t: number; value?: number; proj?: number } | undefined
               if (!active || !p) return null
+              if (p.value === undefined) {
+                return <TooltipBox title="Forecast (~20 min)" rows={[['Predicted', `${p.proj} mg/dL`]]} />
+              }
               return <TooltipBox title={timeFmt.format(p.t)} rows={[['Glucose', `${p.value} mg/dL`]]} />
             }}
           />
@@ -99,9 +112,28 @@ export function LiveChart({ points }: { points: LivePoint[] }) {
             dot={false}
             activeDot={{ r: 5, stroke: 'var(--surface)', strokeWidth: 2 }}
             isAnimationActive={false}
+            connectNulls={false}
+          />
+          <Line
+            type="linear"
+            dataKey="proj"
+            stroke="var(--violet)"
+            strokeWidth={2}
+            strokeDasharray="6 5"
+            dot={{ r: 4, fill: 'var(--violet)', stroke: 'var(--surface)', strokeWidth: 2 }}
+            isAnimationActive={false}
+            connectNulls
           />
         </ComposedChart>
       </ResponsiveContainer>
+      {forecast?.predicted != null ? (
+        <p className="chart-caption">
+          Dashed: ~{forecast.horizon_min}-minute forecast ({forecast.predicted} mg/dL), from the recent trend.
+          {forecast.mae_24h != null
+            ? ` Forecast accuracy: ±${Math.round(forecast.mae_24h)} mg/dL over ${forecast.scored_24h} checked forecasts.`
+            : ''}
+        </p>
+      ) : null}
     </div>
   )
 }

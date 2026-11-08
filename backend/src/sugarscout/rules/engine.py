@@ -13,12 +13,14 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
+from sugarscout.rules.forecast import forecast
 from sugarscout.settings import Settings
 
 URGENT = "urgent"
 WARNING = "warning"
 
 VALUE_RULES = ("urgent_low", "low", "high", "rapid_drop")
+PREDICTIVE_RULES = ("predicted_low", "predicted_urgent_low")
 READING_RULES = (*VALUE_RULES, "data_gap")
 
 
@@ -78,10 +80,23 @@ def _evidence(readings: list[Reading], cfg: RulesConfig) -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True)
+class Symptom:
+    """What the child reported in answer to "How do you feel right now?"."""
+
+    label: str  # e.g. "shaky", "dizzy", "tummy hurts"
+    at: datetime
+
+
 def evaluate(
-    readings: list[Reading], now: datetime, cfg: RulesConfig, child_name: str
+    readings: list[Reading],
+    now: datetime,
+    cfg: RulesConfig,
+    child_name: str,
+    symptom: Symptom | None = None,
 ) -> Evaluation:
-    """`readings` are the child's recent raw readings, oldest first."""
+    """`readings` are the child's recent raw readings, oldest first. `symptom` is a
+    recent symptom the child reported, if any."""
     hits: list[RuleHit] = []
     evaluated: set[str] = {"data_gap"}
 
@@ -151,6 +166,65 @@ def evaluate(
                     f"{child_name}'s glucose is dropping fast ({drop} mg/dL in "
                     f"{len(window) - 1} readings).",
                     {**_evidence(window, cfg), "drop_mg_dl": drop},
+                )
+            )
+
+    # Forecast rules ("low soon"): only while glucose is still above the low line, so
+    # they warn before the threshold rules fire, never after.
+    fc = forecast([r.value for r in readings])
+    if fc is not None and latest.value >= cfg.low:
+        evidence = {
+            **_evidence(readings[-4:], cfg),
+            "forecast": {
+                "predicted": fc.predicted,
+                "horizon_min": fc.horizon_min,
+                "slope_per_5min": fc.slope_per_5min,
+                "r2": fc.r2,
+            },
+        }
+        falling = fc.slope_per_5min < 0
+        if falling and fc.predicted < cfg.urgent_low:
+            evaluated.add("predicted_urgent_low")
+            hits.append(
+                RuleHit(
+                    "predicted_urgent_low",
+                    URGENT,
+                    f"{child_name}'s glucose may reach about {fc.predicted} mg/dL in "
+                    f"~{fc.horizon_min} min (now {latest.value}, falling "
+                    f"{abs(fc.slope_per_5min):.0f} per 5 min).",
+                    evidence,
+                )
+            )
+        else:
+            evaluated.update(PREDICTIVE_RULES)
+            if falling and fc.predicted < cfg.low:
+                hits.append(
+                    RuleHit(
+                        "predicted_low",
+                        WARNING,
+                        f"{child_name}'s glucose may drop to about {fc.predicted} mg/dL in "
+                        f"~{fc.horizon_min} min (now {latest.value}).",
+                        evidence,
+                    )
+                )
+
+    # A child who says they feel shaky or dizzy while glucose is low, falling or
+    # predicted low gets an urgent alert with their own words. Closed by the parent.
+    if symptom is not None:
+        dropping = fc is not None and (fc.slope_per_5min <= -2 or fc.predicted < cfg.low)
+        if latest.value < cfg.low + 10 or dropping:
+            trend = "falling" if fc is not None and fc.slope_per_5min < 0 else "steady"
+            hits.append(
+                RuleHit(
+                    "symptoms_reported",
+                    URGENT,
+                    f"{child_name} said they feel {symptom.label}. Glucose is {latest.value} mg/dL "
+                    f"and {trend}.",
+                    {
+                        **_evidence(readings[-4:], cfg),
+                        "symptom": symptom.label,
+                        "reported_at": symptom.at.isoformat(),
+                    },
                 )
             )
 

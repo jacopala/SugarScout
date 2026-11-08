@@ -31,6 +31,11 @@ CHILD_REMINDERS: dict[str, str] = {
     "high": "Your number is running high. Please let a grown-up know so you can check your "
     "plan together.",
     "data_gap": "I can't see your sensor right now. Can you ask a grown-up to take a look?",
+    "symptoms_reported": "Thanks for telling me how you feel. I've let your grown-up know. "
+    "Please sit down and follow your plan.",
+    "predicted_urgent_low": "Your number is heading low. Please find a grown-up now and "
+    "follow your plan.",
+    "predicted_low": "Your number is going down. Let's check in with a grown-up soon.",
     "help_request": "I told your grown-up you need help. Stay where you are; they're coming.",
     "emergency_language": "I've let your grown-up know. Stay where you are, and if someone "
     "is nearby, tell them how you feel right now.",
@@ -40,9 +45,12 @@ CHILD_REMINDERS: dict[str, str] = {
 REMINDER_PRIORITY = [
     "help_request",
     "emergency_language",
+    "symptoms_reported",
     "urgent_low",
+    "predicted_urgent_low",
     "low",
     "rapid_drop",
+    "predicted_low",
     "data_gap",
     "high",
 ]

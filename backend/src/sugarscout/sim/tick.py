@@ -11,7 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sugarscout.alerts.service import AlertEvent, sync_alerts
-from sugarscout.rules.engine import Reading, RulesConfig, evaluate
+from sugarscout.rules.engine import Reading, RulesConfig, Symptom, evaluate
+from sugarscout.rules.forecast import Forecast, forecast
 from sugarscout.settings import Settings
 from sugarscout.sim.cgm import load_state, save_state, step, trend_label
 
@@ -51,9 +52,80 @@ async def evaluate_and_sync(
         )
     )
     readings = await recent_readings(engine, child_id, now, lookback)
-    evaluation = evaluate(readings, now, cfg, child_name)
+    symptom = await recent_symptom(engine, child_id, now, settings)
+    evaluation = evaluate(readings, now, cfg, child_name, symptom)
     async with engine.begin() as conn:
         return await sync_alerts(conn, redis, settings, child_id, child_name, evaluation)
+
+
+SYMPTOM_LABELS = {"shaky": "shaky", "dizzy": "dizzy", "tummy": "a tummy ache"}
+
+
+async def recent_symptom(
+    engine: AsyncEngine, child_id: uuid.UUID, now: datetime, settings: Settings
+) -> Symptom | None:
+    """The child's latest "How do you feel right now?" answer, if it was a symptom
+    and recent (about 30 CGM-minutes)."""
+    window = timedelta(seconds=settings.sim_tick_seconds * 6)
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """SELECT answer, answered_at FROM agent_questions
+                       WHERE child_id = :c AND question = 'symptoms_now' AND answered_at > :since
+                       ORDER BY answered_at DESC LIMIT 1"""
+                ),
+                {"c": child_id, "since": now - window},
+            )
+        ).first()
+    if row is None or row.answer not in SYMPTOM_LABELS:
+        return None
+    return Symptom(SYMPTOM_LABELS[row.answer], row.answered_at)
+
+
+async def record_forecast(
+    engine: AsyncEngine, settings: Settings, child_id: uuid.UUID, now: datetime
+) -> Forecast | None:
+    """Store a forecast from the latest readings, and score any earlier forecast whose
+    target time has arrived against the reading nearest to it."""
+    tick = settings.sim_tick_seconds
+    readings = await recent_readings(engine, child_id, now, timedelta(seconds=tick * 6))
+    fc = forecast([r.value for r in readings])
+    async with engine.begin() as conn:
+        if fc is not None:
+            await conn.execute(
+                text(
+                    """INSERT INTO forecasts
+                         (child_id, made_at, target_at, horizon_min, predicted, slope_per_5min)
+                       VALUES (:c, :now, :target, :h, :p, :s)"""
+                ),
+                {
+                    "c": child_id,
+                    "now": now,
+                    "target": now + timedelta(seconds=tick * fc.horizon_min / 5),
+                    "h": fc.horizon_min,
+                    "p": fc.predicted,
+                    "s": fc.slope_per_5min,
+                },
+            )
+        await conn.execute(
+            text(
+                """UPDATE forecasts f SET actual = sub.v, error = sub.v - f.predicted
+                   FROM (
+                     SELECT f2.id,
+                            (SELECT g.value_mg_dl FROM glucose_readings g
+                              WHERE g.child_id = f2.child_id
+                                AND g.ts BETWEEN f2.target_at - CAST(:half AS interval)
+                                    AND f2.target_at + CAST(:half AS interval)
+                              ORDER BY abs(extract(epoch FROM g.ts - f2.target_at)) LIMIT 1) AS v
+                     FROM forecasts f2
+                     WHERE f2.child_id = :c AND f2.actual IS NULL AND f2.target_at <= :now
+                   ) sub
+                   WHERE f.id = sub.id AND sub.v IS NOT NULL"""
+            ),
+            {"c": child_id, "now": now, "half": timedelta(seconds=tick)},
+        )
+    return fc
 
 
 async def run_tick(
@@ -79,5 +151,7 @@ async def run_tick(
                 {"c": child_id, "ts": now, "v": value, "t": trend_label(state.recent)},
             )
     await save_state(redis, state)
+    if value is not None:
+        await record_forecast(engine, settings, child_id, now)
     events, sms_ids = await evaluate_and_sync(engine, redis, settings, child_id, child_name, now)
     return value, events, sms_ids

@@ -8,11 +8,12 @@ import { MealsCard } from '../../components/MealsCard'
 import { MoodCard } from '../../components/MoodCard'
 import { PushToggle } from '../../components/PushToggle'
 import { SummaryCard } from '../../components/SummaryCard'
-import { useDemoState, useLive, useWeek } from '../../lib/queries'
+import { useDemoState, useForecast, useLive, useWeek } from '../../lib/queries'
 
 export function ParentHome() {
   const { data: demo } = useDemoState()
   const live = useLive(10)
+  const forecast = useForecast()
   const week = useWeek()
   const name = demo?.child_name ?? 'your child'
 
@@ -43,7 +44,7 @@ export function ParentHome() {
             <section className="card" aria-labelledby="live-h">
               <h2 id="live-h">Last 10 minutes</h2>
               {live.data && live.data.length > 0 ? (
-                <LiveChart points={live.data} />
+                <LiveChart points={live.data} forecast={forecast.data} />
               ) : (
                 <p className="empty">Waiting for readings…</p>
               )}

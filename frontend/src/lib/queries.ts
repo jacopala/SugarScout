@@ -210,3 +210,24 @@ export function useLogMeal() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meals'] }),
   })
 }
+
+// ---- Forecast ------------------------------------------------------------------
+
+export interface ForecastInfo {
+  made_at: string | null
+  predicted: number | null
+  horizon_min: number | null
+  slope_per_5min: number | null
+  mae_24h: number | null
+  scored_24h: number
+}
+
+export const useForecast = () =>
+  useQuery({
+    queryKey: ['glucose', 'forecast'],
+    queryFn: () => apiGet<ForecastInfo>('/glucose/forecast'),
+    refetchInterval: LIVE_POLL_MS,
+  })
+
+/** Demo time scale: one simulator reading (every 5 s) stands for one 5-minute CGM reading. */
+export const REAL_MS_PER_CGM_MIN = 1000
